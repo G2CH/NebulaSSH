@@ -6,37 +6,44 @@ on:
   workflow_dispatch:
 
 jobs:
-  release:
+  publish-tauri:
     permissions:
       contents: write
     strategy:
       fail-fast: false
       matrix:
-        platform: [macos-latest, ubuntu-22.04, windows-latest]
+        include:
+          - platform: 'macos-13' # Intel
+            args: '--target x86_64-apple-darwin'
+          - platform: 'macos-14' # Apple Silicon
+            args: '--target aarch64-apple-darwin'
+          - platform: 'windows-latest'
+            args: ''
+
     runs-on: ${{ matrix.platform }}
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Install dependencies (Ubuntu only)
-        if: matrix.platform == 'ubuntu-22.04'
+      - name: install dependencies (ubuntu only)
+        if: matrix.platform == 'ubuntu-22.04' # Keep just in case, though not in matrix
         run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
-      - name: Setup Node.js
+      - name: setup node
         uses: actions/setup-node@v4
         with:
-          node-version: 'lts/*'
+          node-version: lts/*
 
-      - name: Install Rust stable
+      - name: install rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-13' && 'x86_64-apple-darwin' || matrix.platform == 'macos-14' && 'aarch64-apple-darwin' || '' }}
 
-      - name: Install frontend dependencies
+      - name: install frontend dependencies
         run: npm install
 
-      - name: Build the app
+      - name: Build and Upload Artifacts
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -46,3 +53,19 @@ jobs:
           releaseBody: 'See the assets to download this version and install.'
           releaseDraft: true
           prerelease: false
+          args: ${{ matrix.args }}
+
+      - name: Package Windows Portable (Green Version)
+        if: matrix.platform == 'windows-latest'
+        run: |
+          cd src-tauri/target/release
+          7z a ../../../nebula-ssh-portable-windows-x64.zip nebula-ssh.exe
+        shell: bash
+
+      - name: Upload Windows Portable
+        if: matrix.platform == 'windows-latest'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload ${{ github.ref_name }} nebula-ssh-portable-windows-x64.zip
+        shell: bash
