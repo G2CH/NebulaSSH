@@ -10,10 +10,7 @@ pub struct ChatMessage {
     pub content: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ChatRequest {
-    pub messages: Vec<ChatMessage>,
-}
+
 
 #[derive(Debug, Serialize, Deserialize)]
 struct OpenAIChoice {

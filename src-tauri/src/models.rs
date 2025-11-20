@@ -29,11 +29,7 @@ pub struct CommandHistory {
     pub executed_at: i64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Setting {
-    pub key: String,
-    pub value: String,
-}
+
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppSettings {
