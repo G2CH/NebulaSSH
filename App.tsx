@@ -8,6 +8,7 @@ import { NewConnectionModal } from './components/NewConnectionModal';
 import { SettingsModal } from './components/SettingsModal';
 import { SplashScreen } from './components/SplashScreen';
 import { RightSidebar } from './components/RightSidebar';
+import { AIModal } from './components/AIModal';
 import { Button } from './components/ui/Button';
 import { useApp } from './contexts/AppContext';
 import { TitleBar } from './components/TitleBar';
@@ -162,6 +163,25 @@ export default function App() {
       console.error('Failed to load servers:', e);
     }
   };
+
+  // Global keyboard shortcuts
+  const { toggleAIModal } = useApp();
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+      const modifier = isMac ? e.metaKey : e.ctrlKey;
+
+      // Cmd/Ctrl + K: Toggle AI Assistant
+      if (modifier && e.key === 'k') {
+        e.preventDefault();
+        toggleAIModal();
+        return;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [toggleAIModal]);
 
   const handleAddServer = React.useCallback(async (newServer: Server) => {
     try {
@@ -574,6 +594,7 @@ export default function App() {
         isOpen={isSettingsModalOpen}
         onClose={() => setIsSettingsModalOpen(false)}
       />
+      <AIModal />
     </div>
   );
 }

@@ -3,11 +3,13 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Session, ConnectionStatus } from '../../types';
 import { vfs } from '../../services/mockFileSystem';
 import { simpleCn } from '../../utils';
-import { Terminal as TerminalIcon, FolderOpen, Activity, Command, Sparkles } from 'lucide-react';
+import { Terminal as TerminalIcon, FolderOpen, Activity, Command, Sparkles, MessageSquare, Wrench, Lightbulb } from 'lucide-react';
 import { SFTPBrowser } from '../SFTP/SFTPBrowser';
 import { SystemDashboard } from './SystemDashboard';
 import { SnippetPanel } from './SnippetPanel';
 import { AIAssistant } from './AIAssistant';
+import { TerminalContextMenu } from '../TerminalContextMenu';
+import { useTerminalContextMenu } from '../../hooks/useTerminalContextMenu';
 import { useApp } from '../../contexts/AppContext';
 import { Terminal } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
@@ -237,7 +239,7 @@ const THEME_PALETTES: Record<string, any> = {
 };
 
 function TerminalSessionComponent({ session, server, active, onUpdateSession, onClose }: Props) {
-  const { t, settings } = useApp();
+  const { t, settings, toggleAIModal, setAIContext } = useApp();
   // Helper to get sidebar state for resizing
   const [isSidebarOpen] = useState(true); // Assuming open for calculation
 
@@ -249,6 +251,39 @@ function TerminalSessionComponent({ session, server, active, onUpdateSession, on
 
   // State for local mock shell if WS fails
   const commandBufferRef = useRef('');
+
+  // Context menu for AI actions
+  const contextMenuActions = [
+    {
+      label: t('ai.ask') || 'Ask AI',
+      icon: <MessageSquare size={14} />,
+      action: (text: string) => {
+        setAIContext({ text, action: 'ask' });
+        toggleAIModal();
+      }
+    },
+    {
+      label: t('ai.explain') || 'Explain',
+      icon: <Lightbulb size={14} />,
+      action: (text: string) => {
+        setAIContext({ text, action: 'explain' });
+        toggleAIModal();
+      }
+    },
+    {
+      label: t('ai.fix') || 'Fix',
+      icon: <Wrench size={14} />,
+      action: (text: string) => {
+        setAIContext({ text, action: 'fix' });
+        toggleAIModal();
+      }
+    }
+  ];
+
+  const { menuPosition, executeAction, menuRef } = useTerminalContextMenu(
+    xtermRef.current,
+    contextMenuActions
+  );
 
   // Initialize Terminal
   useEffect(() => {
@@ -636,6 +671,16 @@ function TerminalSessionComponent({ session, server, active, onUpdateSession, on
             <SystemDashboard sessionId={session.id} isLocal={server.protocol === 'local'} />
           )}
         </div>
+
+        {/* Terminal Context Menu */}
+        {menuPosition && (
+          <TerminalContextMenu
+            position={menuPosition}
+            actions={contextMenuActions}
+            onActionClick={executeAction}
+            menuRef={menuRef}
+          />
+        )}
       </div>
     </div>
   );

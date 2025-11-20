@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { translations, Language } from '../locales';
-import { AppSettings } from '../types';
+import { AppSettings, AIMessage } from '../types';
 
 interface AppContextType {
   theme: 'light' | 'dark';
@@ -11,6 +11,14 @@ interface AppContextType {
   t: (path: string) => string;
   settings: AppSettings;
   updateSettings: (newSettings: AppSettings) => Promise<void>;
+
+  // AI State
+  aiMessages: AIMessage[];
+  setAIMessages: React.Dispatch<React.SetStateAction<AIMessage[]>>;
+  isAIModalOpen: boolean;
+  toggleAIModal: () => void;
+  aiContext: { text: string; action?: 'ask' | 'explain' | 'fix' | 'optimize' } | null;
+  setAIContext: (context: { text: string; action?: 'ask' | 'explain' | 'fix' | 'optimize' } | null) => void;
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
@@ -27,10 +35,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [activeTheme, setActiveTheme] = useState<'light' | 'dark'>('dark');
   const [language, setLanguage] = useState<Language>('zh'); // Default to Chinese
 
+  // AI State
+  const [aiMessages, setAIMessages] = useState<AIMessage[]>([]);
+  const [isAIModalOpen, setIsAIModalOpen] = useState(false);
+  const [aiContext, setAIContext] = useState<{ text: string; action?: 'ask' | 'explain' | 'fix' | 'optimize' } | null>(null);
+
   // Load settings on mount
   useEffect(() => {
     loadSettings();
   }, []);
+
+  // Initialize welcome message if empty
+  useEffect(() => {
+    if (aiMessages.length === 0) {
+      setAIMessages([{
+        id: 'welcome',
+        role: 'model',
+        text: t('ai.welcome'),
+        timestamp: Date.now()
+      }]);
+    }
+  }, [language]); // Re-run when language changes to update welcome message
 
   const loadSettings = async () => {
     try {
@@ -88,6 +113,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     updateSettings({ ...settings, app_theme: newTheme });
   };
 
+  const toggleAIModal = () => {
+    setIsAIModalOpen(prev => !prev);
+  };
+
   const t = (path: string): string => {
     const keys = path.split('.');
     let current: any = translations[language];
@@ -109,7 +138,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setLanguage,
       t,
       settings,
-      updateSettings
+      updateSettings,
+      aiMessages,
+      setAIMessages,
+      isAIModalOpen,
+      toggleAIModal,
+      aiContext,
+      setAIContext
     }}>
       {children}
     </AppContext.Provider>

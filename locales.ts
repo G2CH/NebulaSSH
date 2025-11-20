@@ -33,6 +33,21 @@ export const translations = {
       collapse: 'Collapse Panel',
       expand: 'Expand Panel',
     },
+    ai: {
+      title: 'AI Assistant',
+      welcome: 'Hello! I\'m your AI assistant. How can I help you today?',
+      placeholder: 'Ask me anything...',
+      error: 'Sorry, something went wrong.',
+      ask: 'Ask AI',
+      explain: 'Explain',
+      fix: 'Fix',
+      optimize: 'Optimize',
+      expand: 'Expand to modal',
+      // Prompt templates
+      prompt_explain: 'Please explain what this does:\n\n```\n{code}\n```',
+      prompt_fix: 'Please help fix any issues in this:\n\n```\n{code}\n```',
+      prompt_optimize: 'Please suggest optimizations for:\n\n```\n{code}\n```',
+    },
     tabs: {
       terminal: 'Terminal',
       files: 'Files',
@@ -148,12 +163,6 @@ export const translations = {
       delete_confirm: 'Delete this snippet?',
       saved: 'Snippet saved!',
     },
-    ai: {
-      title: 'Nebula AI',
-      placeholder: 'Ask about commands, errors...',
-      welcome: 'Hi! I can help you with shell commands, script generation, or troubleshooting.',
-      error: 'Failed to get response. Check API Key.',
-    },
     history: {
       execute: 'Execute',
       add_to_snippets: 'Add to Snippets',
@@ -192,6 +201,21 @@ export const translations = {
       history: '历史记录',
       collapse: '收起面板',
       expand: '展开面板',
+    },
+    ai: {
+      title: 'AI助手',
+      welcome: '你好！我是你的AI助手，有什么可以帮你的吗？',
+      placeholder: '问我任何问题...',
+      error: '抱歉，出现了一些问题。',
+      ask: '询问AI',
+      explain: '解释',
+      fix: '修复',
+      optimize: '优化',
+      expand: '展开为弹窗',
+      // Prompt templates
+      prompt_explain: '请解释以下内容的作用：\n\n```\n{code}\n```',
+      prompt_fix: '请帮我修复以下内容的问题：\n\n```\n{code}\n```',
+      prompt_optimize: '请为以下内容提供优化建议：\n\n```\n{code}\n```',
     },
     tabs: {
       terminal: '终端',
@@ -307,12 +331,6 @@ export const translations = {
       edit_snippet: '编辑指令',
       delete_confirm: '确定删除此指令？',
       saved: '指令已保存！',
-    },
-    ai: {
-      title: 'Nebula AI',
-      placeholder: '询问关于命令、错误...',
-      welcome: '你好！我可以帮你解答 Shell 命令、生成脚本或排查故障。',
-      error: '请求失败，请检查 API Key。',
     },
     history: {
       execute: '执行',

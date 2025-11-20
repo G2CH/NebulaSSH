@@ -1,74 +1,149 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { AIMessage } from '../../types';
 import { simpleCn, generateId } from '../../utils';
 import { useApp } from '../../contexts/AppContext';
 import { invoke } from '@tauri-apps/api/core';
-import { Send, Bot, User, Sparkles, Loader2 } from 'lucide-react';
+import { listen } from '@tauri-apps/api/event';
+import { Send, Bot, User, Sparkles, Loader2, Maximize2, X } from 'lucide-react';
+import { AIMessageRenderer } from './AIMessageRenderer';
 
-export const AIAssistant: React.FC = () => {
-  const { t } = useApp();
-  const [messages, setMessages] = useState<AIMessage[]>([
-    {
-      id: 'welcome',
-      role: 'model',
-      text: t('ai.welcome'),
-      timestamp: Date.now()
-    }
-  ]);
+interface Props {
+  isModal?: boolean;
+  initialContext?: {
+    text: string;
+    action?: 'ask' | 'explain' | 'fix' | 'optimize';
+  };
+}
+
+export const AIAssistant: React.FC<Props> = ({ isModal = false, initialContext: propContext }) => {
+  const { t, aiMessages: messages, setAIMessages: setMessages, toggleAIModal, isAIModalOpen, aiContext, setAIContext } = useApp();
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, isAIModalOpen]);
+
+  // Handle initial context (from terminal selection, etc.)
+  // Prioritize global aiContext over prop
+  const initialContext = aiContext || propContext;
+
+  useEffect(() => {
+    if (initialContext && initialContext.text) {
+      const actionTemplates = {
+        explain: t('ai.prompt_explain').replace('{code}', initialContext.text),
+        fix: t('ai.prompt_fix').replace('{code}', initialContext.text),
+        optimize: t('ai.prompt_optimize').replace('{code}', initialContext.text),
+        ask: initialContext.text
+      };
+
+      const template = actionTemplates[initialContext.action || 'ask'];
+      setInput(template);
+
+      // Clear the context after using it
+      if (aiContext) {
+        setAIContext(null);
+      }
+    }
+  }, [initialContext, aiContext, setAIContext, t]);
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
 
+    let processedInput = input.trim();
+
+    // Process slash commands
+    const slashCommandMatch = processedInput.match(/^\/(\w+)\s+(.+)/s);
+    if (slashCommandMatch) {
+      const [, command, content] = slashCommandMatch;
+      const commandMap: Record<string, 'explain' | 'fix' | 'optimize'> = {
+        explain: 'explain',
+        fix: 'fix',
+        optimize: 'optimize'
+      };
+
+      if (commandMap[command]) {
+        const action = commandMap[command];
+        processedInput = t(`ai.prompt_${action}`).replace('{code}', content);
+      }
+    }
+
     const userMsg: AIMessage = {
       id: generateId(),
       role: 'user',
-      text: input,
+      text: processedInput,
       timestamp: Date.now()
     };
 
-    const newMessages = [...messages, userMsg];
-    setMessages(newMessages);
+    const botMsgId = generateId();
+    const botMsg: AIMessage = {
+      id: botMsgId,
+      role: 'model',
+      text: '',
+      timestamp: Date.now()
+    };
+
+    // Add both messages immediately
+    const currentMessages = [...messages, userMsg];
+    setMessages([...currentMessages, botMsg]);
     setInput('');
     setIsLoading(true);
 
+    let unlistenChunk: (() => void) | undefined;
+    let unlistenDone: (() => void) | undefined;
+    let unlistenError: (() => void) | undefined;
+
+    const cleanup = () => {
+      if (unlistenChunk) unlistenChunk();
+      if (unlistenDone) unlistenDone();
+      if (unlistenError) unlistenError();
+      setIsLoading(false);
+    };
+
     try {
-      // Prepare messages for backend (convert to simple format if needed)
-      const chatMessages = newMessages.map(m => ({
-        role: m.role,
+      // Setup listeners
+      unlistenChunk = await listen<string>('ai_response_chunk', (event) => {
+        setMessages(prev => prev.map(msg =>
+          msg.id === botMsgId
+            ? { ...msg, text: msg.text + event.payload }
+            : msg
+        ));
+      });
+
+      unlistenDone = await listen('ai_response_done', () => {
+        cleanup();
+      });
+
+      unlistenError = await listen<string>('ai_response_error', (event) => {
+        console.error("AI Stream Error:", event.payload);
+        setMessages(prev => prev.map(msg =>
+          msg.id === botMsgId
+            ? { ...msg, text: msg.text + `\n\n[Error: ${event.payload}]` }
+            : msg
+        ));
+        cleanup();
+      });
+
+      // Prepare messages for backend
+      const chatMessages = currentMessages.map(m => ({
+        role: m.role === 'model' ? 'assistant' : m.role,
         content: m.text
       }));
 
       // Call backend service
-      const response = await invoke<string>('chat_completion', {
+      await invoke('chat_completion', {
         messages: chatMessages
       });
 
-      const botMsg: AIMessage = {
-        id: generateId(),
-        role: 'model',
-        text: response,
-        timestamp: Date.now()
-      };
-      setMessages(prev => [...prev, botMsg]);
     } catch (error) {
-      console.error("AI Error:", error);
-      const errorMsg: AIMessage = {
-        id: generateId(),
-        role: 'model',
-        text: typeof error === 'string' ? error : t('ai.error'),
-        timestamp: Date.now()
-      };
-      setMessages(prev => [...prev, errorMsg]);
-    } finally {
-      setIsLoading(false);
+      console.error("AI Invocation Error:", error);
+      setMessages(prev => prev.map(msg =>
+        msg.id === botMsgId
+          ? { ...msg, text: typeof error === 'string' ? error : t('ai.error') }
+          : msg
+      ));
+      cleanup();
     }
   };
 
@@ -79,18 +154,33 @@ export const AIAssistant: React.FC = () => {
     }
   };
 
-  return (
-    <div className="flex flex-col h-full bg-slate-50 dark:bg-[#0c0c0e] border-l border-slate-200 dark:border-dark-border w-80 transition-colors">
-      {/* Header */}
-      <div className="h-10 flex items-center px-4 border-b border-slate-200 dark:border-dark-border bg-white dark:bg-dark-surface/30 flex-shrink-0">
-        <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
-          <Sparkles size={14} className="text-nebula-600 dark:text-nebula-500" />
-          {t('ai.title')}
-        </span>
+  // If modal is open AND we are NOT in the modal (i.e. we are the sidebar instance), show placeholder
+  if (isAIModalOpen && !isModal) {
+    return (
+      <div className="flex flex-col h-full bg-slate-50 dark:bg-[#0c0c0e] border-l border-slate-200 dark:border-dark-border w-full items-center justify-center text-slate-400 gap-3">
+        <Maximize2 size={24} />
+        <p className="text-xs text-center px-4">
+          AI Assistant is open in a separate window.
+        </p>
+        <button
+          onClick={toggleAIModal}
+          className="text-xs text-nebula-500 hover:underline"
+        >
+          Restore to sidebar
+        </button>
       </div>
+    );
+  }
+
+  return (
+    <div className={simpleCn(
+      "flex flex-col h-full bg-slate-50 dark:bg-[#0c0c0e] transition-colors",
+      !isModal && "border-l border-slate-200 dark:border-dark-border w-full"
+    )}>
+      {/* Header removed as per request, controls moved to sidebar header */}
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-hide">
+      <div className="flex-1 overflow-y-auto p-4 space-y-6 scrollbar-hide">
         {messages.map((msg) => (
           <div key={msg.id} className={simpleCn("flex gap-3", msg.role === 'user' ? "flex-row-reverse" : "flex-row")}>
             <div className={simpleCn(
@@ -100,12 +190,12 @@ export const AIAssistant: React.FC = () => {
               {msg.role === 'user' ? <User size={12} /> : <Bot size={14} />}
             </div>
             <div className={simpleCn(
-              "max-w-[85%] rounded-2xl px-3 py-2 text-xs leading-relaxed shadow-sm",
+              "max-w-[90%] rounded-2xl px-3 py-2 text-xs leading-relaxed shadow-sm",
               msg.role === 'user'
                 ? "bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-tr-none"
-                : "bg-white dark:bg-[#18181b] border border-slate-200 dark:border-dark-border text-slate-600 dark:text-slate-300 rounded-tl-none"
+                : "bg-white dark:bg-[#18181b] border border-slate-200 dark:border-dark-border text-slate-600 dark:text-slate-300 rounded-tl-none w-full"
             )}>
-              <div className="whitespace-pre-wrap font-sans">{msg.text}</div>
+              <AIMessageRenderer content={msg.text} role={msg.role} />
             </div>
           </div>
         ))}
