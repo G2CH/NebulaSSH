@@ -1,0 +1,5 @@
+{
+  "name": "Nebula SSH",
+  "description": "A next-generation, client-side SSH client UI featuring a modern aesthetic, robust connection management, and a simulated terminal environment for prototyping.",
+  "requestFramePermissions": []
+}
