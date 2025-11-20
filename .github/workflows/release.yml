@@ -55,17 +55,4 @@ jobs:
           prerelease: false
           args: ${{ matrix.args }}
 
-      - name: Package Windows Portable (Green Version)
-        if: matrix.platform == 'windows-latest'
-        run: |
-          cd src-tauri/target/release
-          7z a ../../../nebula-ssh-portable-windows-x64.zip nebula-ssh.exe
-        shell: bash
 
-      - name: Upload Windows Portable
-        if: matrix.platform == 'windows-latest'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release upload ${{ github.ref_name }} nebula-ssh-portable-windows-x64.zip
-        shell: bash
