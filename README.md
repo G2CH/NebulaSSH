@@ -67,6 +67,19 @@
    npm run tauri build
    ```
 
+## ❓ Troubleshooting
+
+### macOS: "App is damaged and can't be opened"
+
+This is a common issue on macOS when installing applications from unidentified developers (not notarized by Apple). To fix this:
+
+1. Open Terminal.
+2. Run the following command:
+   ```bash
+   sudo xattr -r -d com.apple.quarantine /Applications/NebulaSSH.app
+   ```
+   *(Replace `/Applications/NebulaSSH.app` with the actual path to the app)*
+
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

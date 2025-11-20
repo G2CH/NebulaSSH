@@ -66,6 +66,19 @@
    npm run tauri build
    ```
 
+## ❓ 常见问题
+
+### macOS: "应用已损坏，无法打开"
+
+这是 macOS 的安全机制（Gatekeeper）拦截了未签名的应用。解决方法如下：
+
+1. 打开终端 (Terminal)。
+2. 输入以下命令并回车（需要输入密码）：
+   ```bash
+   sudo xattr -r -d com.apple.quarantine /Applications/NebulaSSH.app
+   ```
+   *（请将 `/Applications/NebulaSSH.app` 替换为您实际的应用路径）*
+
 ## 📄 开源协议
 
 本项目采用 MIT 协议 - 详情请参阅 [LICENSE](LICENSE) 文件。
