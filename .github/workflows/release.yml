@@ -35,6 +35,21 @@ jobs:
         run: |
           brew install create-dmg
 
+      - name: install dependencies (windows only)
+        if: matrix.platform == 'windows-latest'
+        run: |
+          # 安装 vcpkg 并设置环境变量
+          git clone https://github.com/Microsoft/vcpkg.git
+          cd vcpkg
+          .\bootstrap-vcpkg.bat
+          .\vcpkg install openssl:x64-windows
+          cd ..
+          echo "VCPKG_ROOT=$env:GITHUB_WORKSPACE\vcpkg" >> $env:GITHUB_ENV
+          echo "$env:GITHUB_WORKSPACE\vcpkg\installed\x64-windows" >> $env:GITHUB_PATH
+          echo "OPENSSL_DIR=$env:GITHUB_WORKSPACE\vcpkg\installed\x64-windows" >> $env:GITHUB_ENV
+          echo "OPENSSL_INCLUDE_DIR=$env:GITHUB_WORKSPACE\vcpkg\installed\x64-windows\include" >> $env:GITHUB_ENV
+          echo "OPENSSL_LIB_DIR=$env:GITHUB_WORKSPACE\vcpkg\installed\x64-windows\lib" >> $env:GITHUB_ENV
+
       - name: setup node
         uses: actions/setup-node@v4
         with:
@@ -43,7 +58,7 @@ jobs:
       - name: install rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.platform == 'macos-13' && 'x86_64-apple-darwin' || matrix.platform == 'macos-14' && 'aarch64-apple-darwin' || '' }}
+          targets: ${{ matrix.platform == 'macos-13' && 'x86_64-apple-darwin' || matrix.platform == 'macos-14' && 'aarch64-apple-darwin' || matrix.platform == 'windows-latest' && 'x86_64-pc-windows-msvc' || '' }}
 
       - name: install frontend dependencies
         run: npm install
@@ -61,5 +76,3 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
-
-
