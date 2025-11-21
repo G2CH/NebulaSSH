@@ -535,36 +535,57 @@ pub fn write_remote_file(
 pub async fn duplicate_session(
     window: Window,
     state: tauri::State<'_, SshState>,
+    local_state: tauri::State<'_, crate::local_term::LocalState>,
     db: tauri::State<'_, Database>,
     source_id: String,
     new_id: String,
 ) -> Result<(), String> {
     println!("Duplicating session {} to {}", source_id, new_id);
     
-    let (host, port, username, password, private_key, jump_host_id) = {
+    // Check SSH sessions first
+    let ssh_params = {
         let sessions = state.sessions.lock().unwrap();
-        let session = sessions.get(&source_id).ok_or("Source session not found")?;
-        (
+        sessions.get(&source_id).map(|session| (
             session.host.clone(),
             session.port,
             session.username.clone(),
             session.password.clone(),
             session.private_key.clone(),
             session.jump_host_id,
-        )
+        ))
     };
 
-    connect_ssh(
-        window,
-        state,
-        db,
-        new_id,
-        host,
-        port,
-        username,
-        password,
-        private_key,
-        None,
-        jump_host_id
-    ).await
+    if let Some((host, port, username, password, private_key, jump_host_id)) = ssh_params {
+        return connect_ssh(
+            window,
+            state,
+            db,
+            new_id,
+            host,
+            port,
+            username,
+            password,
+            private_key,
+            None,
+            jump_host_id
+        ).await;
+    }
+
+    // Check Local sessions
+    let is_local = {
+        let sessions = local_state.sessions.lock().unwrap();
+        sessions.contains_key(&source_id)
+    };
+
+    if is_local {
+        return crate::local_term::connect_local(
+            window,
+            local_state,
+            new_id,
+            80, // Default cols
+            24  // Default rows
+        );
+    }
+
+    Err("Source session not found".to_string())
 }

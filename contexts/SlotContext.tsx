@@ -1,38 +1,39 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
 
 interface SlotContextType {
-    registerSlot: (id: string, element: HTMLElement | null) => void;
-    getSlot: (id: string) => HTMLElement | null;
-    slots: Record<string, HTMLElement>;
-    hiddenContainer: HTMLElement | null;
+    getPaneRoot: (id: string) => HTMLElement;
+    removePaneRoot: (id: string) => void;
 }
 
 const SlotContext = createContext<SlotContextType | null>(null);
 
 export const SlotProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [slots, setSlots] = useState<Record<string, HTMLElement>>({});
-    const [hiddenContainer, setHiddenContainer] = useState<HTMLElement | null>(null);
+    const paneRootsRef = useRef<Record<string, HTMLElement>>({});
 
-    const registerSlot = useCallback((id: string, element: HTMLElement | null) => {
-        setSlots(prev => {
-            if (element === null) {
-                const { [id]: _, ...rest } = prev;
-                return rest;
-            }
-            if (prev[id] === element) return prev;
-            return { ...prev, [id]: element };
-        });
+    const getPaneRoot = useCallback((id: string) => {
+        if (!paneRootsRef.current[id]) {
+            const div = document.createElement('div');
+            div.style.width = '100%';
+            div.style.height = '100%';
+            div.style.position = 'absolute';
+            div.style.top = '0';
+            div.style.left = '0';
+            paneRootsRef.current[id] = div;
+        }
+        return paneRootsRef.current[id];
     }, []);
 
-    const getSlot = useCallback((id: string) => slots[id] || null, [slots]);
+    const removePaneRoot = useCallback((id: string) => {
+        const root = paneRootsRef.current[id];
+        if (root) {
+            root.remove(); // Ensure it's detached
+            delete paneRootsRef.current[id];
+        }
+    }, []);
 
     return (
-        <SlotContext.Provider value={{ registerSlot, getSlot, slots, hiddenContainer }}>
+        <SlotContext.Provider value={{ getPaneRoot, removePaneRoot }}>
             {children}
-            <div
-                ref={setHiddenContainer}
-                style={{ display: 'none', position: 'absolute', width: 0, height: 0, overflow: 'hidden' }}
-            />
         </SlotContext.Provider>
     );
 };

@@ -10,15 +10,15 @@ interface Props {
 }
 
 export const SplitPane: React.FC<Props> = ({ node, panes, onResize }) => {
-    const { registerSlot } = useSlot();
+    const { getPaneRoot } = useSlot();
     const slotRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         if (node.type === 'leaf' && node.paneId && slotRef.current) {
-            registerSlot(node.paneId, slotRef.current);
-            return () => registerSlot(node.paneId!, null);
+            const root = getPaneRoot(node.paneId);
+            slotRef.current.appendChild(root);
         }
-    }, [node, registerSlot]);
+    }, [node, getPaneRoot]);
 
     if (node.type === 'leaf') {
         if (!node.paneId) return null;
