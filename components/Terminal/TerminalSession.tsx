@@ -649,7 +649,7 @@ function TerminalSessionComponent({ session, server, active, activeView, paneId,
             e.stopPropagation();
             onClosePane?.();
           }}
-          className="absolute top-2 right-2 z-20 p-1.5 rounded-md bg-slate-100 dark:bg-dark-surface border border-slate-200 dark:border-dark-border hover:bg-red-50 dark:hover:bg-red-900/20 hover:border-red-300 dark:hover:border-red-700 hover:text-red-600 dark:hover:text-red-400 transition-colors shadow-sm group"
+          className="absolute top-2 right-2 z-20 p-1.5 rounded-md bg-slate-100 dark:bg-dark-surface hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 transition-colors group"
           title={t('terminal.close_pane')}
         >
           <X size={14} className="group-hover:scale-110 transition-transform" />
