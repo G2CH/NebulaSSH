@@ -10,11 +10,19 @@ import {
   File as FileIcon,
   ArrowUp,
   Download,
+  Edit3,
   Upload,
   RefreshCw,
   Search,
   ChevronRight,
-  Home
+  Home,
+  FileCode,
+  FileImage,
+  FileArchive,
+  FileJson,
+  FileType,
+  FileVideo,
+  FileAudio
 } from 'lucide-react';
 
 import { invoke } from '@tauri-apps/api/core';
@@ -25,9 +33,81 @@ interface Props {
   initialPath: string;
   onNavigate: (path: string) => void;
   isLocal?: boolean;
+  onEdit?: (filePath: string) => void;
 }
 
-export const SFTPBrowser: React.FC<Props> = ({ sessionId, initialPath, onNavigate, isLocal = false }) => {
+const getFileIcon = (name: string) => {
+  const ext = name.split('.').pop()?.toLowerCase();
+
+  switch (ext) {
+    // Code
+    case 'js':
+    case 'jsx':
+    case 'ts':
+    case 'tsx':
+    case 'py':
+    case 'rs':
+    case 'go':
+    case 'c':
+    case 'cpp':
+    case 'h':
+    case 'html':
+    case 'css':
+    case 'php':
+    case 'java':
+      return FileCode;
+
+    // Data/Config
+    case 'json':
+    case 'yaml':
+    case 'yml':
+    case 'xml':
+    case 'toml':
+    case 'ini':
+    case 'env':
+      return FileJson;
+
+    // Images
+    case 'png':
+    case 'jpg':
+    case 'jpeg':
+    case 'gif':
+    case 'svg':
+    case 'webp':
+    case 'ico':
+      return FileImage;
+
+    // Archives
+    case 'zip':
+    case 'tar':
+    case 'gz':
+    case 'rar':
+    case '7z':
+      return FileArchive;
+
+    // Media
+    case 'mp4':
+    case 'mov':
+    case 'avi':
+    case 'mkv':
+      return FileVideo;
+    case 'mp3':
+    case 'wav':
+    case 'ogg':
+      return FileAudio;
+
+    // Text
+    case 'txt':
+    case 'md':
+    case 'log':
+      return FileText;
+
+    default:
+      return FileIcon;
+  }
+};
+
+export const SFTPBrowser: React.FC<Props> = ({ sessionId, initialPath, onNavigate, isLocal = false, onEdit }) => {
   const { t } = useApp();
   const [currentPath, setCurrentPath] = useState(initialPath);
   const [files, setFiles] = useState<FileSystemNode[]>([]);
@@ -258,8 +338,8 @@ export const SFTPBrowser: React.FC<Props> = ({ sessionId, initialPath, onNavigat
             {files.map((file) => {
               const isSelected = selectedItems.has(file.name);
               const icon = file.type === 'directory'
-                ? <Folder size={18} className="text-blue-500 fill-blue-500/10" />
-                : <FileText size={18} className="text-slate-400" />;
+                ? <Folder size={18} className="text-nebula-500 fill-nebula-500/20" />
+                : React.createElement(getFileIcon(file.name), { size: 18, className: "text-slate-400 dark:text-slate-500" });
 
               return (
                 <div
@@ -267,7 +347,7 @@ export const SFTPBrowser: React.FC<Props> = ({ sessionId, initialPath, onNavigat
                   onClick={(e) => handleItemClick(file.name, e)}
                   onDoubleClick={() => handleDoubleClick(file)}
                   className={simpleCn(
-                    "grid grid-cols-12 gap-4 px-4 py-2 cursor-pointer items-center text-sm border-b border-transparent transition-colors",
+                    "group grid grid-cols-12 gap-4 px-4 py-2 cursor-pointer items-center text-sm border-b border-transparent transition-colors",
                     isSelected
                       ? "bg-nebula-50 dark:bg-nebula-500/10 border-nebula-100 dark:border-transparent"
                       : "hover:bg-slate-50 dark:hover:bg-dark-surface/40"
@@ -288,8 +368,22 @@ export const SFTPBrowser: React.FC<Props> = ({ sessionId, initialPath, onNavigat
                   <div className="col-span-3 text-slate-500 text-xs truncate">
                     {file.lastModified}
                   </div>
-                  <div className="col-span-1 text-slate-400 dark:text-slate-600 text-xs capitalize truncate">
-                    {file.type === 'directory' ? t('sftp.type_folder') : t('sftp.type_file')}
+                  <div className="col-span-1 flex items-center gap-1">
+                    <span className="text-slate-500 dark:text-slate-600">
+                      {file.type === 'directory' ? t('sftp.type_folder') : t('sftp.type_file')}
+                    </span>
+                    {file.type === 'file' && onEdit && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEdit(`${currentPath}/${file.name}`);
+                        }}
+                        className="ml-2 p-1 rounded hover:bg-nebula-100 dark:hover:bg-nebula-500/20 text-nebula-600 dark:text-nebula-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Edit file"
+                      >
+                        <Edit3 size={14} />
+                      </button>
+                    )}
                   </div>
                 </div>
               );

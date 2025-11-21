@@ -55,6 +55,8 @@ impl Database {
         let _ = conn.execute("ALTER TABLE servers ADD COLUMN server_group TEXT", []);
         let _ = conn.execute("ALTER TABLE servers ADD COLUMN tags TEXT", []);
         let _ = conn.execute("ALTER TABLE servers ADD COLUMN color TEXT", []);
+        let _ = conn.execute("ALTER TABLE servers ADD COLUMN forwarding_rules TEXT", []);
+        let _ = conn.execute("ALTER TABLE servers ADD COLUMN jump_host_id INTEGER", []);
         
         // Command history table
         conn.execute(

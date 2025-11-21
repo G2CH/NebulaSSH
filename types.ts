@@ -6,6 +6,14 @@ export enum ConnectionStatus {
   FAILED = 'FAILED',
 }
 
+export interface PortForwardingRule {
+  id: string;
+  rule_type: 'Local' | 'Remote' | 'Dynamic';
+  source_port: number;
+  destination_host?: string;
+  destination_port?: number;
+}
+
 export interface Server {
   id: string | number;
   name: string;
@@ -21,6 +29,8 @@ export interface Server {
   lastConnected?: number;
   created_at?: number;
   updated_at?: number;
+  forwarding_rules?: PortForwardingRule[];
+  jump_host_id?: number;
 }
 
 export interface TerminalLine {
@@ -35,11 +45,37 @@ export interface Session {
   id: string;
   serverId: string | number;
   status: ConnectionStatus;
-  activeView: 'terminal' | 'sftp' | 'monitor';
   history: TerminalLine[];
   currentDirectory: string;
   commandHistory: string[];
   historyPointer: number;
+}
+
+export interface Pane {
+  id: string;
+  sessionId: string;
+  flex?: number;
+  activeView: 'terminal' | 'sftp' | 'monitor' | 'editor';
+  editorFile?: string;
+}
+
+export type SplitDirection = 'horizontal' | 'vertical';
+
+export interface SplitNode {
+  id: string;
+  type: 'leaf' | 'split';
+  direction?: SplitDirection;
+  children?: SplitNode[];
+  paneId?: string;
+  flex?: number;
+  sizes?: number[];
+}
+
+export interface Tab {
+  id: string;
+  title: string;
+  layout: SplitNode;
+  activePaneId: string;
 }
 
 export interface FileSystemNode {

@@ -1,9 +1,9 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Session, ConnectionStatus } from '../../types';
+import { Session, ConnectionStatus, Pane } from '../../types';
 import { vfs } from '../../services/mockFileSystem';
 import { simpleCn } from '../../utils';
-import { Terminal as TerminalIcon, FolderOpen, Activity, Command, Sparkles, MessageSquare, Wrench, Lightbulb } from 'lucide-react';
+import { Terminal as TerminalIcon, FolderOpen, Activity, Command, Sparkles, MessageSquare, Wrench, Lightbulb, SplitSquareHorizontal, SplitSquareVertical, X } from 'lucide-react';
 import { SFTPBrowser } from '../SFTP/SFTPBrowser';
 import { SystemDashboard } from './SystemDashboard';
 import { SnippetPanel } from './SnippetPanel';
@@ -16,13 +16,21 @@ import { FitAddon } from 'xterm-addon-fit';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { Server } from '../../types';
+import { FileEditor } from '../FileEditor';
 
 interface Props {
   session: Session;
   server: Server;
   active: boolean;
+  activeView: 'terminal' | 'sftp' | 'monitor' | 'editor';
+  paneId: string;
+  editorFile?: string;
   onUpdateSession: (sessionId: string, updates: Partial<Session>) => void;
   onClose: () => void;
+  onSplit: (direction: 'horizontal' | 'vertical') => void;
+  onFocus?: () => void;
+  onUpdatePane?: (paneId: string, updates: Partial<Pane>) => void;
+  onClosePane?: () => void;
 }
 
 const LIGHT_THEME = {
@@ -238,7 +246,7 @@ const THEME_PALETTES: Record<string, any> = {
   }
 };
 
-function TerminalSessionComponent({ session, server, active, onUpdateSession, onClose }: Props) {
+function TerminalSessionComponent({ session, server, active, activeView, paneId, editorFile, onUpdateSession, onClose, onSplit, onFocus, onUpdatePane, onClosePane }: Props) {
   const { t, settings, toggleAIModal, setAIContext } = useApp();
   // Helper to get sidebar state for resizing
   const [isSidebarOpen] = useState(true); // Assuming open for calculation
@@ -260,7 +268,8 @@ function TerminalSessionComponent({ session, server, active, onUpdateSession, on
       action: (text: string) => {
         setAIContext({ text, action: 'ask' });
         toggleAIModal();
-      }
+      },
+      requiresSelection: true
     },
     {
       label: t('ai.explain') || 'Explain',
@@ -268,7 +277,8 @@ function TerminalSessionComponent({ session, server, active, onUpdateSession, on
       action: (text: string) => {
         setAIContext({ text, action: 'explain' });
         toggleAIModal();
-      }
+      },
+      requiresSelection: true
     },
     {
       label: t('ai.fix') || 'Fix',
@@ -276,11 +286,27 @@ function TerminalSessionComponent({ session, server, active, onUpdateSession, on
       action: (text: string) => {
         setAIContext({ text, action: 'fix' });
         toggleAIModal();
-      }
+      },
+      requiresSelection: true
+    },
+    {
+      label: t('terminal.split_vertical') || 'Split Vertical',
+      icon: <SplitSquareVertical size={14} />,
+      action: () => onSplit('vertical')
+    },
+    {
+      label: t('terminal.split_horizontal') || 'Split Horizontal',
+      icon: <SplitSquareHorizontal size={14} />,
+      action: () => onSplit('horizontal')
+    },
+    {
+      label: t('terminal.close_pane'),
+      icon: <X size={14} />,
+      action: () => onClosePane?.()
     }
   ];
 
-  const { menuPosition, executeAction, menuRef } = useTerminalContextMenu(
+  const { menuPosition, executeAction, menuRef, selectedText } = useTerminalContextMenu(
     xtermRef.current,
     contextMenuActions
   );
@@ -427,7 +453,7 @@ function TerminalSessionComponent({ session, server, active, onUpdateSession, on
     // Handle Resize
     const handleResize = () => {
       // Only resize if terminal is active (visible)
-      if (!active || session.activeView !== 'terminal') return;
+      if (!active || activeView !== 'terminal') return;
       safeFit();
     };
     window.addEventListener('resize', handleResize);
@@ -450,13 +476,13 @@ function TerminalSessionComponent({ session, server, active, onUpdateSession, on
 
   // Handle active state changes (focus and resize)
   useEffect(() => {
-    if (active && session.activeView === 'terminal' && xtermRef.current && fitAddonRef.current) {
+    if (active && activeView === 'terminal' && xtermRef.current && fitAddonRef.current) {
       requestAnimationFrame(() => {
         safeFit();
         xtermRef.current?.focus();
       });
     }
-  }, [active, session.activeView]);
+  }, [active, activeView]);
 
   // Disconnect SSH only on component unmount (session close)
   useEffect(() => {
@@ -477,12 +503,12 @@ function TerminalSessionComponent({ session, server, active, onUpdateSession, on
 
   // Update layout when sidebars open/close
   useEffect(() => {
-    if (session.activeView === 'terminal') {
+    if (activeView === 'terminal') {
       setTimeout(() => {
         safeFit();
       }, 300); // Wait for transition
     }
-  }, [session.activeView, isSidebarOpen]);
+  }, [activeView, isSidebarOpen]);
 
   const safeFit = () => {
     if (!fitAddonRef.current || !xtermRef.current) return;
@@ -596,22 +622,27 @@ function TerminalSessionComponent({ session, server, active, onUpdateSession, on
     { id: 'sftp', icon: FolderOpen, label: t('tabs.sftp') },
     { id: 'dashboard', icon: Activity, label: t('tabs.monitor') }
   ];
-  const activeTabIndex = tabs.findIndex(tab => tab.id === session.activeView);
+  const activeTabIndex = tabs.findIndex(tab => tab.id === activeView);
 
   return (
     <div
-      className="flex-1 flex flex-col h-full overflow-hidden bg-slate-50 dark:bg-[#0d1117] transition-colors"
-      style={{ display: active ? 'flex' : 'none' }}
+      className={simpleCn(
+        "flex-1 flex flex-col h-full overflow-hidden transition-all relative",
+        active ? "ring-2 ring-nebula-500/50 z-10" : "border-r border-b border-slate-200 dark:border-dark-border",
+        server.protocol === 'local' ? "bg-slate-50 dark:bg-dark-bg" : "bg-slate-950"
+      )}
+      style={{ display: 'flex' }}
+      onClick={() => onFocus?.()}
     >
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden relative bg-slate-50 dark:bg-dark-bg">
         {/* Top Bar */}
         <div className="h-10 bg-slate-100/50 dark:bg-dark-surface/30 border-b border-slate-200 dark:border-dark-border flex items-center justify-center px-4 flex-shrink-0 backdrop-blur-sm">
           <div className="flex items-center gap-1 px-1 py-1 bg-white dark:bg-dark-surface rounded-lg border border-slate-200 dark:border-dark-border shadow-sm">
             <button
-              onClick={() => onUpdateSession(session.id, { activeView: 'terminal' })}
+              onClick={() => onUpdatePane?.(paneId, { activeView: 'terminal' })}
               className={simpleCn(
                 "px-2.5 py-1 rounded-md text-[11px] font-medium transition-all flex items-center gap-1.5",
-                session.activeView === 'terminal'
+                activeView === 'terminal'
                   ? "bg-nebula-500 text-white shadow-sm"
                   : "text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-dark-bg"
               )}
@@ -620,10 +651,10 @@ function TerminalSessionComponent({ session, server, active, onUpdateSession, on
               {t('tabs.terminal')}
             </button>
             <button
-              onClick={() => onUpdateSession(session.id, { activeView: 'sftp' })}
+              onClick={() => onUpdatePane?.(paneId, { activeView: 'sftp' })}
               className={simpleCn(
                 "px-2.5 py-1 rounded-md text-[11px] font-medium transition-all flex items-center gap-1.5",
-                session.activeView === 'sftp'
+                activeView === 'sftp'
                   ? "bg-nebula-500 text-white shadow-sm"
                   : "text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-dark-bg"
               )}
@@ -632,10 +663,10 @@ function TerminalSessionComponent({ session, server, active, onUpdateSession, on
               {t('tabs.sftp')}
             </button>
             <button
-              onClick={() => onUpdateSession(session.id, { activeView: 'monitor' })}
+              onClick={() => onUpdatePane?.(paneId, { activeView: 'monitor' })}
               className={simpleCn(
                 "px-2.5 py-1 rounded-md text-[11px] font-medium transition-all flex items-center gap-1.5",
-                session.activeView === 'monitor'
+                activeView === 'monitor'
                   ? "bg-nebula-500 text-white shadow-sm"
                   : "text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-dark-bg"
               )}
@@ -650,7 +681,7 @@ function TerminalSessionComponent({ session, server, active, onUpdateSession, on
         <div className="flex-1 min-h-0 relative">
           <div
             className="absolute inset-0 flex flex-col"
-            style={{ display: session.activeView === 'terminal' ? 'flex' : 'none' }}
+            style={{ display: activeView === 'terminal' ? 'flex' : 'none' }}
           >
             <div
               ref={terminalContainerRef}
@@ -658,17 +689,30 @@ function TerminalSessionComponent({ session, server, active, onUpdateSession, on
             />
           </div>
 
-          {session.activeView === 'sftp' && (
+          {activeView === 'sftp' && (
             <SFTPBrowser
               sessionId={session.id}
               initialPath={session.currentDirectory}
               onNavigate={(path) => onUpdateSession(session.id, { currentDirectory: path })}
               isLocal={server.protocol === 'local'}
+              onEdit={(filePath) => {
+                if (onUpdatePane) {
+                  onUpdatePane(paneId, { activeView: 'editor', editorFile: filePath });
+                }
+              }}
             />
           )}
 
-          {session.activeView === 'monitor' && (
+          {activeView === 'monitor' && (
             <SystemDashboard sessionId={session.id} isLocal={server.protocol === 'local'} />
+          )}
+
+          {activeView === 'editor' && onUpdatePane && editorFile && (
+            <FileEditor
+              sessionId={session.id}
+              filePath={editorFile}
+              onClose={() => onUpdatePane(paneId, { activeView: 'terminal' })}
+            />
           )}
         </div>
 
@@ -679,10 +723,11 @@ function TerminalSessionComponent({ session, server, active, onUpdateSession, on
             actions={contextMenuActions}
             onActionClick={executeAction}
             menuRef={menuRef}
+            hasSelection={!!selectedText}
           />
         )}
       </div>
-    </div>
+    </div >
   );
 };
 

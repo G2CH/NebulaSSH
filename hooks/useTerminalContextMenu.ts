@@ -5,6 +5,7 @@ export interface ContextMenuAction {
     label: string;
     icon?: React.ReactNode;
     action: (selectedText: string) => void;
+    requiresSelection?: boolean;
 }
 
 export interface ContextMenuPosition {
@@ -34,17 +35,13 @@ export const useTerminalContextMenu = (
         const handleContextMenu = (e: MouseEvent) => {
             const selection = terminal.getSelection();
 
-            if (selection && selection.trim()) {
-                e.preventDefault(); // Prevent default browser context menu
-                setSelectedText(selection.trim());
-                setMenuPosition({
-                    x: e.clientX,
-                    y: e.clientY
-                });
-            } else {
-                // Also prevent default menu when no selection
-                e.preventDefault();
-            }
+            e.preventDefault(); // Prevent default browser context menu
+            const text = selection ? selection.trim() : '';
+            setSelectedText(text);
+            setMenuPosition({
+                x: e.clientX,
+                y: e.clientY
+            });
         };
 
         const handleClick = (e: MouseEvent) => {

@@ -9,8 +9,8 @@ pub fn create_server(db: &Database, server: &Server) -> Result<i64> {
     let tags_json = serde_json::to_string(&server.tags).unwrap_or_default();
     
     conn.execute(
-        "INSERT INTO servers (name, host, port, username, password, private_key_path, server_group, tags, color, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+        "INSERT INTO servers (name, host, port, username, password, private_key_path, server_group, tags, color, created_at, updated_at, forwarding_rules, jump_host_id)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
         rusqlite::params![
             server.name,
             server.host,
@@ -23,6 +23,8 @@ pub fn create_server(db: &Database, server: &Server) -> Result<i64> {
             server.color,
             now,
             now,
+            serde_json::to_string(&server.forwarding_rules).unwrap_or_default(),
+            server.jump_host_id,
         ],
     )?;
     
@@ -32,7 +34,7 @@ pub fn create_server(db: &Database, server: &Server) -> Result<i64> {
 pub fn get_all_servers(db: &Database) -> Result<Vec<Server>> {
     let conn = db.get_connection();
     let mut stmt = conn.prepare(
-        "SELECT id, name, host, port, username, password, private_key_path, server_group, tags, color, created_at, updated_at
+        "SELECT id, name, host, port, username, password, private_key_path, server_group, tags, color, created_at, updated_at, forwarding_rules, jump_host_id
          FROM servers ORDER BY updated_at DESC",
     )?;
     
@@ -53,6 +55,8 @@ pub fn get_all_servers(db: &Database) -> Result<Vec<Server>> {
             color: row.get(9)?,
             created_at: row.get(10)?,
             updated_at: row.get(11)?,
+            forwarding_rules: row.get::<_, Option<String>>(12)?.and_then(|s| serde_json::from_str(&s).ok()),
+            jump_host_id: row.get(13)?,
         })
     })?;
     
@@ -63,7 +67,7 @@ pub fn get_all_servers(db: &Database) -> Result<Vec<Server>> {
 pub fn get_server(db: &Database, id: i64) -> Result<Option<Server>> {
     let conn = db.get_connection();
     let mut stmt = conn.prepare(
-        "SELECT id, name, host, port, username, password, private_key_path, server_group, tags, color, created_at, updated_at
+        "SELECT id, name, host, port, username, password, private_key_path, server_group, tags, color, created_at, updated_at, forwarding_rules, jump_host_id
          FROM servers WHERE id = ?1",
     )?;
     
@@ -84,6 +88,8 @@ pub fn get_server(db: &Database, id: i64) -> Result<Option<Server>> {
             color: row.get(9)?,
             created_at: row.get(10)?,
             updated_at: row.get(11)?,
+            forwarding_rules: row.get::<_, Option<String>>(12)?.and_then(|s| serde_json::from_str(&s).ok()),
+            jump_host_id: row.get(13)?,
         })
     })?;
     
@@ -100,7 +106,7 @@ pub fn update_server(db: &Database, server: &Server) -> Result<()> {
     
     conn.execute(
         "UPDATE servers SET name = ?1, host = ?2, port = ?3, username = ?4, 
-         password = ?5, private_key_path = ?6, server_group = ?7, tags = ?8, color = ?9, updated_at = ?10 WHERE id = ?11",
+         password = ?5, private_key_path = ?6, server_group = ?7, tags = ?8, color = ?9, updated_at = ?10, forwarding_rules = ?12, jump_host_id = ?13 WHERE id = ?11",
         rusqlite::params![
             server.name,
             server.host,
@@ -113,6 +119,8 @@ pub fn update_server(db: &Database, server: &Server) -> Result<()> {
             server.color,
             now,
             server.id,
+            serde_json::to_string(&server.forwarding_rules).unwrap_or_default(),
+            server.jump_host_id,
         ],
     )?;
     

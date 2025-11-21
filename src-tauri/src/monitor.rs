@@ -83,7 +83,7 @@ pub fn get_system_stats(
 ) -> Result<SystemStats, String> {
     let mut sessions = monitor_state.sessions.lock().unwrap();
     
-    // Ensure session exists
+    // Ensure session exists (same connection logic as before)
     if !sessions.contains_key(&id) {
         let (host, port, username, password, private_key) = {
             let ssh_sessions = ssh_state.sessions.lock().unwrap();
@@ -126,148 +126,184 @@ pub fn get_system_stats(
 
     // Helper to run command safely
     let run_safe = |cmd: &str| -> String {
-        run_command(sess, cmd).unwrap_or_default()
+        match run_command(sess, cmd) {
+            Ok(output) => {
+                println!("DEBUG: Command executed. Output length: {}", output.len());
+                if output.is_empty() {
+                    println!("DEBUG: Output is empty!");
+                } else {
+                    // println!("DEBUG: Output start: {}", &output[..std::cmp::min(output.len(), 100)]);
+                }
+                output
+            },
+            Err(e) => {
+                println!("Command failed: {} - Error: {}", cmd.lines().next().unwrap_or(""), e);
+                String::new()
+            }
+        }
     };
 
-    // Detect OS
+    // 1. Detect OS (Fast single command)
     let uname = run_safe("uname -s");
     let is_mac = uname.contains("Darwin");
 
-    // 1. Uptime
-    let uptime = if is_mac {
-        // Mac: sysctl -n kern.boottime (returns sec, usec) or uptime command
-        // uptime: "16:08  up 1 day, 58 mins, 2 users, load averages: 1.66 1.83 1.79"
-        let _out = run_safe("sysctl -n kern.boottime");
-        // { sec = 1731912345, usec = ... }
-        // Easier: just parse `uptime` command or return 0
-        0 // TODO: Parse mac uptime
+    // 2. Construct ONE big command to fetch everything
+    // Wrap in (...) 2>&1 to capture stderr in the output for debugging
+    let cmd_inner = if is_mac {
+        "echo '---UPTIME---'; sysctl -n kern.boottime; echo '---MEM---'; sysctl -n hw.memsize; echo '---DISK---'; df -h /; echo '---CPU---'; top -l 1 | grep 'CPU usage'; echo '---PROC---'; ps aux -r | head -6 | tail -5; echo '---OS---'; sw_vers -productVersion; echo '---MODEL---'; sysctl -n machdep.cpu.brand_string; echo '---CORES---'; sysctl -n hw.ncpu;"
     } else {
-        let out = run_safe("cat /proc/uptime"); 
-        out.split_whitespace().next().unwrap_or("0").parse::<f64>().unwrap_or(0.0) as u64
+        "echo '---UPTIME---'; cat /proc/uptime; echo '---MEM---'; free -m; echo '---DISK---'; df -h /; echo '---CPU---'; top -bn1 | grep 'Cpu(s)'; echo '---PROC---'; ps aux --sort=-%cpu | head -6 | tail -5; echo '---OS---'; cat /etc/os-release | grep PRETTY_NAME | cut -d'\"' -f2; echo '---MODEL---'; cat /proc/cpuinfo | grep 'model name' | head -1 | cut -d':' -f2; echo '---CORES---'; nproc;"
     };
 
-    // 2. Memory
-    let (mem_total, mem_used, mem_usage) = if is_mac {
-        // Mac: sysctl hw.memsize
-        // vm_stat
-        let total = run_safe("sysctl -n hw.memsize").trim().parse::<u64>().unwrap_or(0) / 1024 / 1024;
-        (total, 0, 0.0) // TODO: Parse vm_stat
-    } else {
-        let out = run_safe("free -m");
-        let mut total = 0;
-        let mut used = 0;
-        for line in out.lines() {
-            if line.starts_with("Mem:") {
-                let parts: Vec<&str> = line.split_whitespace().collect();
-                if parts.len() >= 3 {
-                    total = parts[1].parse().unwrap_or(0);
-                    used = parts[2].parse().unwrap_or(0);
-                }
-            }
-        }
-        (total, used, if total > 0 { (used as f32 / total as f32) * 100.0 } else { 0.0 })
-    };
+    let cmd = format!("(export TERM=xterm; {}) 2>&1", cmd_inner);
 
-    // 3. Disk
-    let out = run_safe("df -h /");
+    let output = run_safe(&cmd);
+    
+    // Parse the output
+    let mut uptime = 0;
+    let mut mem_total = 0;
+    let mut mem_used = 0;
+    let mut mem_usage = 0.0;
     let mut disk_total = "0G".to_string();
     let mut disk_used = "0G".to_string();
     let mut disk_usage = 0.0;
-    for line in out.lines().skip(1) {
-        let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.len() >= 5 {
-            // Mac and Linux output for df -h is similar enough for the first line of /
-            // Linux: /dev/sda1 20G 14G 5.4G 72% /
-            // Mac:   /dev/disk1s1 466Gi 100Gi 366Gi 22% /
-            // Parts indices might differ if filesystem name has spaces, but usually / is simple
-            // Let's look for the line ending with /
-            if parts.last() == Some(&"/") || parts.last() == Some(&"/System/Volumes/Data") { 
-                 // Mac often mounts / read-only and data on /System/Volumes/Data
-                 // But df -h / usually shows the root slice.
-                 // Let's just take the first line that looks right.
-                 if parts.len() >= 5 {
-                     disk_total = parts[1].to_string();
-                     disk_used = parts[2].to_string();
-                     let percent = parts[4].trim_end_matches('%');
-                     disk_usage = percent.parse().unwrap_or(0.0);
-                     break;
-                 }
-            }
-        }
-    }
-
-    // 4. Processes
-    // Get processes (simplified, just top by CPU)
-    let proc_lines = run_safe("ps aux --sort=-%cpu | head -6 | tail -5");
+    let mut cpu_usage = 0.0;
     let mut processes = Vec::new();
-    for line in proc_lines.lines().skip(0) {
-        let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.len() >= 11 {
-            processes.push(ProcessInfo {
-                pid: parts.get(1).unwrap_or(&"").to_string(),
-                user: parts.get(0).unwrap_or(&"").to_string(),
-                cpu: parts.get(2).unwrap_or(&"0").to_string(),
-                mem: parts.get(3).unwrap_or(&"0").to_string(),
-                command: parts[10..].join(" "),
-            });
+    let mut os_version = String::new();
+    let mut cpu_model = String::new();
+    let mut cpu_cores = 0;
+
+    let parts: Vec<&str> = output.split("---").collect();
+    // Expected format: ["", "UPTIME", "\n123\n", "MEM", "\n123\n", ...]
+    // So we iterate starting from index 1, taking 2 items at a time (Key, Value)
+    
+    let mut i = 1;
+    while i < parts.len().saturating_sub(1) {
+        let key = parts[i].trim();
+        let content = parts[i+1].trim();
+        i += 2;
+
+        // println!("DEBUG: Parsing Key: '{}'", key);
+
+        match key {
+            "UPTIME" => {
+                if is_mac {
+                    // Mac: { sec = 1731912345, usec = ... }
+                    if let Some(start) = content.find("sec = ") {
+                        let s = &content[start+6..];
+                        if let Some(end) = s.find(',') {
+                            if let Ok(boot_sec) = s[..end].parse::<u64>() {
+                                let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_secs();
+                                if now > boot_sec {
+                                    uptime = now - boot_sec;
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // Linux: 12345.67 23456.78
+                    uptime = content.split_whitespace().next().unwrap_or("0").parse::<f64>().unwrap_or(0.0) as u64;
+                }
+            },
+            "MEM" => {
+                if is_mac {
+                    // Mac: just hw.memsize in bytes
+                    mem_total = content.parse::<u64>().unwrap_or(0) / 1024 / 1024;
+                } else {
+                    // Linux: free -m output
+                    for line in content.lines() {
+                        if line.starts_with("Mem:") {
+                            let p: Vec<&str> = line.split_whitespace().collect();
+                            if p.len() >= 3 {
+                                mem_total = p[1].parse().unwrap_or(0);
+                                mem_used = p[2].parse().unwrap_or(0);
+                                if mem_total > 0 {
+                                    mem_usage = (mem_used as f32 / mem_total as f32) * 100.0;
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "DISK" => {
+                for line in content.lines().skip(1) {
+                    let p: Vec<&str> = line.split_whitespace().collect();
+                    if p.len() >= 5 {
+                        if p.last() == Some(&"/") || p.last() == Some(&"/System/Volumes/Data") {
+                             disk_total = p[1].to_string();
+                             disk_used = p[2].to_string();
+                             let percent = p[4].trim_end_matches('%');
+                             disk_usage = percent.parse().unwrap_or(0.0);
+                             break;
+                        }
+                    }
+                }
+            },
+            "CPU" => {
+                if is_mac {
+                    // CPU usage: 12.34% user, 5.67% sys, 81.99% idle
+                    if let Some(idle_idx) = content.find(" idle") {
+                        let s = &content[..idle_idx];
+                        if let Some(last_space) = s.rfind(' ') {
+                            let idle_val = s[last_space+1..].trim_end_matches('%').parse::<f32>().unwrap_or(100.0);
+                            cpu_usage = 100.0 - idle_val;
+                        }
+                    }
+                } else {
+                    // %Cpu(s):  0.3 us,  0.2 sy,  0.0 ni, 99.5 id, ...
+                    if let Some(idle_part) = content.split(',').find(|s| s.contains("id")) {
+                         let idle_val: f32 = idle_part.trim().split_whitespace().next().unwrap_or("0").parse().unwrap_or(100.0);
+                         cpu_usage = 100.0 - idle_val;
+                    }
+                }
+            },
+            "PROC" => {
+                for line in content.lines().skip(0) {
+                    let p: Vec<&str> = line.split_whitespace().collect();
+                    if p.len() >= 11 {
+                        processes.push(ProcessInfo {
+                            pid: p.get(1).unwrap_or(&"").to_string(),
+                            user: p.get(0).unwrap_or(&"").to_string(),
+                            cpu: p.get(2).unwrap_or(&"0").to_string(),
+                            mem: p.get(3).unwrap_or(&"0").to_string(),
+                            command: p[10..].join(" "),
+                        });
+                    }
+                }
+            },
+            "OS" => {
+                if is_mac {
+                    os_version = format!("macOS {}", content.trim());
+                } else {
+                    os_version = content.trim().to_string();
+                    if os_version.is_empty() {
+                        os_version = format!("Linux {}", uname.trim());
+                    }
+                }
+            },
+            "MODEL" => {
+                cpu_model = content.trim().to_string();
+            },
+            "CORES" => {
+                cpu_cores = content.trim().parse().unwrap_or(0);
+            },
+            _ => {}
         }
     }
-    
-    // 5. CPU Usage
-    let cpu_usage = if is_mac {
-        0.0 // TODO: top -l 1 | grep "CPU usage"
-    } else {
-        let out = run_safe("top -bn1 | grep 'Cpu(s)'");
-        if let Some(idle_part) = out.split(',').find(|s| s.contains("id")) {
-             let idle_val: f32 = idle_part.trim().split_whitespace().next().unwrap_or("0").parse().unwrap_or(100.0);
-             100.0 - idle_val
-        } else {
-            0.0
-        }
-    };
 
-    let net_rx = 0;
-    let net_tx = 0;
-
-    // Get system info
-    let os_version = if is_mac {
-        let sw_vers = run_safe("sw_vers -productVersion");
-        format!("macOS {}", sw_vers.trim())
-    } else {
-        let os_release = run_safe("cat /etc/os-release | grep PRETTY_NAME | cut -d'\"' -f2");
-        if !os_release.is_empty() {
-            os_release.trim().to_string()
-        } else {
-            format!("Linux {}", uname.trim())
-        }
-    };
-
-    let cpu_model = if is_mac {
-        run_safe("sysctl -n machdep.cpu.brand_string").trim().to_string()
-    } else {
-        let model = run_safe("cat /proc/cpuinfo | grep 'model name' | head -1 | cut -d':' -f2");
-        model.trim().to_string()
-    };
-
-    let cpu_cores = if is_mac {
-        run_safe("sysctl -n hw.ncpu").trim().parse::<u32>().unwrap_or(0)
-    } else {
-        run_safe("nproc").trim().parse::<u32>().unwrap_or(0)
-    };
-
-    let mem_total_gb = format!("{:.1} GB", mem_total as f64 / 1024.0 / 1024.0);
+    let mem_total_gb = format!("{:.1} GB", mem_total as f64 / 1024.0);
 
     Ok(SystemStats {
         uptime,
         cpu_usage,
         mem_usage,
         mem_total,
-        mem_free: mem_total - mem_used,
+        mem_free: mem_total.saturating_sub(mem_used),
         disk_usage,
         disk_total,
         disk_used,
-        net_rx,
-        net_tx,
+        net_rx: 0,
+        net_tx: 0,
         processes,
         os_version,
         cpu_model,

@@ -7,9 +7,14 @@ interface Props {
     actions: ContextMenuAction[];
     onActionClick: (action: ContextMenuAction) => void;
     menuRef: React.RefObject<HTMLDivElement>;
+    hasSelection: boolean;
 }
 
-export const TerminalContextMenu: React.FC<Props> = ({ position, actions, onActionClick, menuRef }) => {
+export const TerminalContextMenu: React.FC<Props> = ({ position, actions, onActionClick, menuRef, hasSelection }) => {
+    const visibleActions = actions.filter(action => !action.requiresSelection || hasSelection);
+
+    if (visibleActions.length === 0) return null;
+
     return (
         <div
             ref={menuRef}
@@ -19,7 +24,7 @@ export const TerminalContextMenu: React.FC<Props> = ({ position, actions, onActi
                 top: `${position.y}px`
             }}
         >
-            {actions.map((action, index) => (
+            {visibleActions.map((action, index) => (
                 <button
                     key={index}
                     onClick={() => onActionClick(action)}

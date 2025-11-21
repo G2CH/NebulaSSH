@@ -1,6 +1,15 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PortForwardingRule {
+    pub id: String, // UUID
+    pub rule_type: String, // "Local", "Remote", "Dynamic"
+    pub source_port: u16,
+    pub destination_host: Option<String>,
+    pub destination_port: Option<u16>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Server {
     pub id: Option<i64>,
     pub name: String,
@@ -17,6 +26,10 @@ pub struct Server {
     pub tags: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub color: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub forwarding_rules: Option<Vec<PortForwardingRule>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub jump_host_id: Option<i64>,
     pub created_at: i64,
     pub updated_at: i64,
 }
