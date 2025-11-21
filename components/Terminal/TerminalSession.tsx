@@ -25,6 +25,7 @@ interface Props {
   activeView: 'terminal' | 'sftp' | 'monitor' | 'editor';
   paneId: string;
   editorFile?: string;
+  paneCount?: number;
   onUpdateSession: (sessionId: string, updates: Partial<Session>) => void;
   onClose: () => void;
   onSplit: (direction: 'horizontal' | 'vertical') => void;
@@ -246,7 +247,7 @@ const THEME_PALETTES: Record<string, any> = {
   }
 };
 
-function TerminalSessionComponent({ session, server, active, activeView, paneId, editorFile, onUpdateSession, onClose, onSplit, onFocus, onUpdatePane, onClosePane }: Props) {
+function TerminalSessionComponent({ session, server, active, activeView, paneId, editorFile, paneCount, onUpdateSession, onClose, onSplit, onFocus, onUpdatePane, onClosePane }: Props) {
   const { t, settings, toggleAIModal, setAIContext } = useApp();
   // Helper to get sidebar state for resizing
   const [isSidebarOpen] = useState(true); // Assuming open for calculation
@@ -641,6 +642,19 @@ function TerminalSessionComponent({ session, server, active, activeView, paneId,
       style={{ display: 'flex' }}
       onClick={() => onFocus?.()}
     >
+      {/* Close Button - Show only when there are multiple panes */}
+      {paneCount && paneCount > 1 && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onClosePane?.();
+          }}
+          className="absolute top-2 right-2 z-20 p-1.5 rounded-md bg-slate-100 dark:bg-dark-surface border border-slate-200 dark:border-dark-border hover:bg-red-50 dark:hover:bg-red-900/20 hover:border-red-300 dark:hover:border-red-700 hover:text-red-600 dark:hover:text-red-400 transition-colors shadow-sm group"
+          title={t('terminal.close_pane')}
+        >
+          <X size={14} className="group-hover:scale-110 transition-transform" />
+        </button>
+      )}
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden relative bg-slate-50 dark:bg-dark-bg">
         {/* Top Bar */}
         <div className="h-10 bg-slate-100/50 dark:bg-dark-surface/30 border-b border-slate-200 dark:border-dark-border flex items-center justify-center px-4 flex-shrink-0 backdrop-blur-sm">

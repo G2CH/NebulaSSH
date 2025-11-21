@@ -599,6 +599,7 @@ function AppContent() {
                           activeView={pane.activeView}
                           paneId={pane.id}
                           editorFile={pane.editorFile}
+                          paneCount={Object.keys(panes).length}
                           onUpdateSession={updateSession}
                           onClose={() => handleCloseTab(activeTabId!)}
                           onSplit={handleSplitAction}
