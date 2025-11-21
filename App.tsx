@@ -11,7 +11,7 @@ const PanePortal: React.FC<{ paneId: string; children: React.ReactNode }> = ({ p
 };
 
 import { invoke } from '@tauri-apps/api/core';
-import { Server, Session, ConnectionStatus, Pane, Tab, SplitNode } from './types';
+import { Server, Session, ConnectionStatus, Pane, Tab, SplitNode, AppSessionState, TabState, PaneState, AppSettings } from './types';
 import { simpleCn, generateId, isTauri } from './utils';
 import { TerminalSession } from './components/Terminal/TerminalSession';
 import { SplitPane } from './components/Layout/SplitPane';
@@ -21,10 +21,13 @@ import { SettingsModal } from './components/SettingsModal';
 import { SplashScreen } from './components/SplashScreen';
 import { RightSidebar } from './components/RightSidebar';
 import { AIModal } from './components/AIModal';
+import { UnlockScreen } from './components/Security/UnlockScreen';
+import { SetupMasterPassword } from './components/Security/SetupMasterPassword';
 import { Button } from './components/ui/Button';
 import { useApp } from './contexts/AppContext';
 import { TitleBar } from './components/TitleBar';
 import { useSplitPanes } from './hooks/useSplitPanes';
+import { useIdleTimer } from './hooks/useIdleTimer';
 import {
   Plus,
   Search,
@@ -57,8 +60,48 @@ const LOCAL_SERVER: Server = {
 };
 
 function AppContent() {
-  const { t } = useApp();
+  const { t, updateSettings, settings } = useApp();
   const [servers, setServers] = useState<Server[]>(INITIAL_SERVERS);
+  const [isLocked, setIsLocked] = useState(false);
+  const [isSetupRequired, setIsSetupRequired] = useState(false);
+  const [isCheckingSecurity, setIsCheckingSecurity] = useState(true);
+
+  // Auto-lock timer
+  useIdleTimer(
+    settings.lock_timeout,
+    () => {
+      if (!isLocked && !isSetupRequired && !isCheckingSecurity) {
+        console.log('Auto-locking due to inactivity');
+        setIsLocked(true);
+      }
+    },
+    !isLocked && !isSetupRequired && !isCheckingSecurity // Only active when unlocked
+  );
+
+
+  // Check security status on mount
+  useEffect(() => {
+    const checkSecurity = async () => {
+      try {
+        const isSet = await invoke<boolean>('is_master_password_set');
+        if (isSet) {
+          // Only lock on startup if auto-lock is enabled
+          if (settings.lock_timeout > 0) {
+            setIsLocked(true);
+          }
+        } else {
+          // Force setup on first run (no master password set yet)
+          setIsSetupRequired(true);
+        }
+      } catch (e) {
+        console.error('Failed to check security:', e);
+      } finally {
+        setIsCheckingSecurity(false);
+      }
+    };
+    checkSecurity();
+  }, []); // Run only once on mount
+
 
   // Use split panes hook
   const {
@@ -75,9 +118,86 @@ function AppContent() {
     handleClosePane,
     setActiveTabId,
     handleResize,
+    restoreState,
   } = useSplitPanes();
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
+  // Session Persistence
+  useEffect(() => {
+    const loadState = async () => {
+      try {
+        const savedState = await invoke<AppSessionState | null>('load_session_state');
+        if (savedState) {
+          console.log('Restoring session state:', savedState);
+          restoreState(savedState);
+
+          // Reconnect sessions (optional: auto-reconnect logic could go here)
+          // For now, sessions start as DISCONNECTED.
+          // We could trigger reconnection for active tab's panes.
+        }
+      } catch (e) {
+        console.error('Failed to load session state:', e);
+      }
+    };
+    loadState();
+  }, [restoreState]);
+
+  // Auto-save state
+  useEffect(() => {
+    const saveState = async () => {
+      if (tabs.length === 0) return;
+
+      const tabStates: TabState[] = tabs.map(tab => {
+        // Collect panes for this tab
+        const tabPanes: PaneState[] = [];
+        const collectPanes = (node: SplitNode) => {
+          if (node.type === 'leaf' && node.paneId) {
+            const pane = panes[node.paneId];
+            if (pane) {
+              const session = sessions[pane.sessionId];
+              tabPanes.push({
+                id: pane.id,
+                session_id: pane.sessionId,
+                server_id: session?.serverId || '',
+                current_directory: session?.currentDirectory || null,
+                active_view: pane.activeView,
+                editor_file: pane.editorFile || null,
+              });
+            }
+          }
+          if (node.children) {
+            node.children.forEach(collectPanes);
+          }
+        };
+        collectPanes(tab.layout);
+
+        return {
+          id: tab.id,
+          name: tab.title,
+          layout: tab.layout,
+          panes: tabPanes,
+          active_pane_id: tab.activePaneId,
+        };
+      });
+
+      const state: AppSessionState = {
+        tabs: tabStates,
+        active_tab_id: activeTabId,
+        last_saved: Date.now(),
+        version: '0.2.0', // Should match backend version
+      };
+
+      try {
+        await invoke('save_session_state', { state });
+      } catch (e) {
+        console.error('Failed to save session state:', e);
+      }
+    };
+
+    const timer = setTimeout(saveState, 5000); // Debounce 5s
+    return () => clearTimeout(timer);
+  }, [tabs, panes, sessions, activeTabId]);
   const [isNewConnectionModalOpen, setIsNewConnectionModalOpen] = useState(false);
   const [editingServer, setEditingServer] = useState<Server | null>(null);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
@@ -337,8 +457,38 @@ function AppContent() {
     return <SplashScreen onFinish={() => setShowSplash(false)} />;
   }
 
+  if (isCheckingSecurity) {
+    return (
+      <div className="flex h-screen w-screen items-center justify-center bg-slate-950 text-white">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+      </div>
+    );
+  }
+
+  if (isSetupRequired) {
+    return <SetupMasterPassword onComplete={() => setIsSetupRequired(false)} />;
+  }
+
   return (
-    <div className="flex flex-col h-screen w-screen bg-slate-50 dark:bg-dark-bg overflow-hidden text-slate-800 dark:text-slate-200 selection:bg-nebula-500/30 selection:text-nebula-600 dark:selection:text-nebula-100 font-sans transition-colors duration-300">
+    <div className="flex flex-col h-screen w-screen bg-slate-50 dark:bg-dark-bg overflow-hidden text-slate-800 dark:text-slate-200 selection:bg-nebula-500/30 selection:text-nebula-600 dark:selection:text-nebula-100 font-sans transition-colors duration-300 relative">
+
+      {/* Security Overlay */}
+      {isLocked && (
+        <div className="absolute inset-0 z-[100]">
+          <UnlockScreen onUnlock={async () => {
+            setIsLocked(false);
+            // Reload all data after unlock
+            await loadServers();
+            // Reload settings
+            try {
+              const loaded = await invoke<AppSettings>('get_app_settings');
+              updateSettings(loaded);
+            } catch (e) {
+              console.error('Failed to reload settings:', e);
+            }
+          }} />
+        </div>
+      )}
 
       {/* Custom Title Bar (Only renders in Tauri) */}
       <TitleBar />

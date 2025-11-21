@@ -26,6 +26,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   theme: 'default',
   app_theme: 'system',
   ai_provider: 'openai',
+  auto_reconnect: true,
 };
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -50,8 +51,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (aiMessages.length === 0) {
       setAIMessages([{
         id: 'welcome',
-        role: 'model',
-        text: t('ai.welcome'),
+        role: 'assistant',
+        content: t('ai.welcome'),
         timestamp: Date.now()
       }]);
     }

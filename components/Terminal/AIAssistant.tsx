@@ -29,29 +29,11 @@ export const AIAssistant: React.FC<Props> = ({ isModal = false, initialContext: 
   // Prioritize global aiContext over prop
   const initialContext = aiContext || propContext;
 
-  useEffect(() => {
-    if (initialContext && initialContext.text) {
-      const actionTemplates = {
-        explain: t('ai.prompt_explain').replace('{code}', initialContext.text),
-        fix: t('ai.prompt_fix').replace('{code}', initialContext.text),
-        optimize: t('ai.prompt_optimize').replace('{code}', initialContext.text),
-        ask: initialContext.text
-      };
+  const handleSend = async (textOverride?: string) => {
+    const textToSend = textOverride || input;
+    if (!textToSend.trim() || isLoading) return;
 
-      const template = actionTemplates[initialContext.action || 'ask'];
-      setInput(template);
-
-      // Clear the context after using it
-      if (aiContext) {
-        setAIContext(null);
-      }
-    }
-  }, [initialContext, aiContext, setAIContext, t]);
-
-  const handleSend = async () => {
-    if (!input.trim() || isLoading) return;
-
-    let processedInput = input.trim();
+    let processedInput = textToSend.trim();
 
     // Process slash commands
     const slashCommandMatch = processedInput.match(/^\/(\w+)\s+(.+)/s);
@@ -72,15 +54,15 @@ export const AIAssistant: React.FC<Props> = ({ isModal = false, initialContext: 
     const userMsg: AIMessage = {
       id: generateId(),
       role: 'user',
-      text: processedInput,
+      content: processedInput,
       timestamp: Date.now()
     };
 
     const botMsgId = generateId();
     const botMsg: AIMessage = {
       id: botMsgId,
-      role: 'model',
-      text: '',
+      role: 'assistant',
+      content: '',
       timestamp: Date.now()
     };
 
@@ -106,7 +88,7 @@ export const AIAssistant: React.FC<Props> = ({ isModal = false, initialContext: 
       unlistenChunk = await listen<string>('ai_response_chunk', (event) => {
         setMessages(prev => prev.map(msg =>
           msg.id === botMsgId
-            ? { ...msg, text: msg.text + event.payload }
+            ? { ...msg, content: msg.content + event.payload }
             : msg
         ));
       });
@@ -119,7 +101,7 @@ export const AIAssistant: React.FC<Props> = ({ isModal = false, initialContext: 
         console.error("AI Stream Error:", event.payload);
         setMessages(prev => prev.map(msg =>
           msg.id === botMsgId
-            ? { ...msg, text: msg.text + `\n\n[Error: ${event.payload}]` }
+            ? { ...msg, content: msg.content + `\n\n[Error: ${event.payload}]` }
             : msg
         ));
         cleanup();
@@ -127,8 +109,8 @@ export const AIAssistant: React.FC<Props> = ({ isModal = false, initialContext: 
 
       // Prepare messages for backend
       const chatMessages = currentMessages.map(m => ({
-        role: m.role === 'model' ? 'assistant' : m.role,
-        content: m.text
+        role: m.role,
+        content: m.content
       }));
 
       // Call backend service
@@ -140,12 +122,38 @@ export const AIAssistant: React.FC<Props> = ({ isModal = false, initialContext: 
       console.error("AI Invocation Error:", error);
       setMessages(prev => prev.map(msg =>
         msg.id === botMsgId
-          ? { ...msg, text: typeof error === 'string' ? error : t('ai.error') }
+          ? { ...msg, content: typeof error === 'string' ? error : t('ai.error') }
           : msg
       ));
       cleanup();
     }
   };
+
+  useEffect(() => {
+    if (initialContext && initialContext.text) {
+      const actionTemplates = {
+        explain: t('ai.prompt_explain').replace('{code}', initialContext.text),
+        fix: t('ai.prompt_fix').replace('{code}', initialContext.text),
+        optimize: t('ai.prompt_optimize').replace('{code}', initialContext.text),
+        ask: initialContext.text
+      };
+
+      const template = actionTemplates[initialContext.action || 'ask'];
+
+      // If it's a specific action, auto-send
+      if (initialContext.action && initialContext.action !== 'ask') {
+        handleSend(template);
+      } else {
+        // Otherwise just populate input
+        setInput(template);
+      }
+
+      // Clear the context after using it
+      if (aiContext) {
+        setAIContext(null);
+      }
+    }
+  }, [initialContext, aiContext, setAIContext, t]); // Be careful with dependencies here to avoid loops
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -195,7 +203,7 @@ export const AIAssistant: React.FC<Props> = ({ isModal = false, initialContext: 
                 ? "bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-tr-none"
                 : "bg-white dark:bg-[#18181b] border border-slate-200 dark:border-dark-border text-slate-600 dark:text-slate-300 rounded-tl-none w-full"
             )}>
-              <AIMessageRenderer content={msg.text} role={msg.role} />
+              <AIMessageRenderer content={msg.content} role={msg.role} />
             </div>
           </div>
         ))}
@@ -224,7 +232,7 @@ export const AIAssistant: React.FC<Props> = ({ isModal = false, initialContext: 
             onKeyDown={handleKeyDown}
           />
           <button
-            onClick={handleSend}
+            onClick={() => handleSend()}
             disabled={!input.trim() || isLoading}
             className="absolute right-1.5 top-1.5 p-1.5 bg-nebula-600 hover:bg-nebula-500 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white rounded-lg transition-colors"
           >

@@ -1,81 +1,76 @@
-
-export enum ConnectionStatus {
-  DISCONNECTED = 'DISCONNECTED',
-  CONNECTING = 'CONNECTING',
-  CONNECTED = 'CONNECTED',
-  FAILED = 'FAILED',
-}
-
-export interface PortForwardingRule {
-  id: string;
-  rule_type: 'Local' | 'Remote' | 'Dynamic';
-  source_port: number;
-  destination_host?: string;
-  destination_port?: number;
-}
-
 export interface Server {
-  id: string | number;
+  id: string;
   name: string;
-  group?: string;
-  host: string;
-  port?: number;
   protocol: 'ssh' | 'local';
-  username: string;
+  host?: string;
+  port?: number;
+  username?: string;
   password?: string;
   privateKeyPath?: string;
-  tags: string[];
+  localForwards?: PortForward[];
+  remoteForwards?: PortForward[];
+  jumpHostId?: string | null;
+  group?: string;
+  tags?: string[];
   color?: string;
-  lastConnected?: number;
   created_at?: number;
   updated_at?: number;
-  forwarding_rules?: PortForwardingRule[];
-  jump_host_id?: number;
 }
 
-export interface TerminalLine {
-  id: string;
-  type: 'input' | 'output' | 'system' | 'error';
-  content: string;
-  timestamp: number;
-  directory?: string;
+export interface PortForward {
+  localPort: number;
+  remoteHost: string;
+  remotePort: number;
 }
 
 export interface Session {
   id: string;
-  serverId: string | number;
+  serverId: string;
   status: ConnectionStatus;
-  history: TerminalLine[];
-  currentDirectory: string;
+  currentDirectory?: string;
+  history: string[];
   commandHistory: string[];
   historyPointer: number;
 }
 
-export interface Pane {
-  id: string;
-  sessionId: string;
-  flex?: number;
-  activeView: 'terminal' | 'sftp' | 'monitor' | 'editor';
-  editorFile?: string;
-}
-
-export type SplitDirection = 'horizontal' | 'vertical';
-
-export interface SplitNode {
-  id: string;
-  type: 'leaf' | 'split';
-  direction?: SplitDirection;
-  children?: SplitNode[];
-  paneId?: string;
-  flex?: number;
-  sizes?: number[];
+export enum ConnectionStatus {
+  CONNECTING = 'connecting',
+  CONNECTED = 'connected',
+  DISCONNECTED = 'disconnected',
+  FAILED = 'failed',
 }
 
 export interface Tab {
   id: string;
   title: string;
-  layout: SplitNode;
   activePaneId: string;
+  layout: SplitNode;
+}
+
+export interface Pane {
+  id: string;
+  sessionId: string;
+  activeView: 'terminal' | 'sftp' | 'monitor' | 'editor';
+  editorFile?: string;
+}
+
+export interface SplitNode {
+  id?: string;
+  type: 'split' | 'leaf';
+  direction?: 'horizontal' | 'vertical';
+  children?: SplitNode[];
+  paneId?: string;
+  sizes?: number[];
+}
+
+export interface FileItem {
+  name: string;
+  isDirectory: boolean;
+  size: number;
+  modifiedTime: string;
+  permissions: string;
+  owner: string;
+  group: string;
 }
 
 export interface FileSystemNode {
@@ -98,14 +93,25 @@ export interface Snippet {
 
 export interface AIMessage {
   id: string;
-  role: 'user' | 'model';
-  text: string;
+  role: 'user' | 'assistant';
+  content: string;
   timestamp: number;
 }
 
-export interface SSHMessage {
-  type: 'connect' | 'data' | 'resize' | 'error';
-  data?: string;
+export interface LocalSystemStats {
+  os: string;
+  hostname: string;
+  uptime: number;
+  cpuUsage: number;
+  memoryUsage: number;
+  memoryTotal: number;
+  diskUsage: number;
+  diskTotal: number;
+  networkRx: number;
+  networkTx: number;
+}
+
+export interface TerminalDimensions {
   cols?: number;
   rows?: number;
 }
@@ -113,9 +119,36 @@ export interface SSHMessage {
 export interface AppSettings {
   history_limit: number;
   theme: string;
-  app_theme: string;
+  app_theme: 'light' | 'dark' | 'system';
   ai_provider: string;
   ai_api_key?: string;
   ai_model?: string;
   ai_base_url?: string;
+  auto_reconnect: boolean;
+  lock_timeout: number; // Minutes, 0 to disable
+}
+
+// Session Persistence Types
+export interface AppSessionState {
+  tabs: TabState[];
+  active_tab_id: string | null;
+  last_saved: number;
+  version: string;
+}
+
+export interface TabState {
+  id: string;
+  name: string;
+  layout: SplitNode;
+  panes: PaneState[];
+  active_pane_id: string | null;
+}
+
+export interface PaneState {
+  id: string;
+  session_id: string;
+  server_id: string;
+  current_directory: string | null;
+  active_view: 'terminal' | 'sftp' | 'monitor' | 'editor';
+  editor_file: string | null;
 }

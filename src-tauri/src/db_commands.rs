@@ -10,12 +10,17 @@ pub fn get_servers(db: State<Database>) -> Result<Vec<Server>, String> {
 
 #[tauri::command]
 pub fn save_server(db: State<Database>, server: Server) -> Result<i64, String> {
-    if let Some(_) = server.id {
+    let result = if let Some(_) = server.id {
         servers::update_server(&db, &server).map_err(|e| e.to_string())?;
         Ok(server.id.unwrap())
     } else {
         servers::create_server(&db, &server).map_err(|e| e.to_string())
-    }
+    };
+    
+    // Force flush to disk
+    db.flush().map_err(|e| e.to_string())?;
+    
+    result
 }
 
 #[tauri::command]

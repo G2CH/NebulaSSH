@@ -53,6 +53,8 @@ pub struct AppSettings {
     pub ai_api_key: Option<String>,
     pub ai_model: Option<String>,
     pub ai_base_url: Option<String>,
+    pub auto_reconnect: bool,
+    pub lock_timeout: i32, // Minutes, 0 to disable
 }
 
 impl Default for AppSettings {
@@ -65,6 +67,8 @@ impl Default for AppSettings {
             ai_api_key: None,
             ai_model: None,
             ai_base_url: None,
+            auto_reconnect: true,
+            lock_timeout: 0, // Default: disabled (0 = no auto-lock)
         }
     }
 }

@@ -1,9 +1,8 @@
-
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Session, ConnectionStatus, Pane } from '../../types';
 import { vfs } from '../../services/mockFileSystem';
 import { simpleCn } from '../../utils';
-import { Terminal as TerminalIcon, FolderOpen, Activity, Command, Sparkles, MessageSquare, Wrench, Lightbulb, SplitSquareHorizontal, SplitSquareVertical, X } from 'lucide-react';
+import { Terminal as TerminalIcon, FolderOpen, Activity, Command, Sparkles, MessageSquare, Wrench, Lightbulb, SplitSquareHorizontal, SplitSquareVertical, X, AlertCircle, Unplug, RefreshCw } from 'lucide-react';
 import { SFTPBrowser } from '../SFTP/SFTPBrowser';
 import { SystemDashboard } from './SystemDashboard';
 import { SnippetPanel } from './SnippetPanel';
@@ -261,13 +260,19 @@ function TerminalSessionComponent({ session, server, active, activeView, paneId,
   // State for local mock shell if WS fails
   const commandBufferRef = useRef('');
 
+  // Helper to strip ANSI codes
+  const stripAnsi = (str: string) => {
+    // eslint-disable-next-line no-control-regex
+    return str.replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '');
+  };
+
   // Context menu for AI actions
   const contextMenuActions = [
     {
       label: t('ai.ask') || 'Ask AI',
       icon: <MessageSquare size={14} />,
       action: (text: string) => {
-        setAIContext({ text, action: 'ask' });
+        setAIContext({ text: stripAnsi(text), action: 'ask' });
         toggleAIModal();
       },
       requiresSelection: true
@@ -276,7 +281,7 @@ function TerminalSessionComponent({ session, server, active, activeView, paneId,
       label: t('ai.explain') || 'Explain',
       icon: <Lightbulb size={14} />,
       action: (text: string) => {
-        setAIContext({ text, action: 'explain' });
+        setAIContext({ text: stripAnsi(text), action: 'explain' });
         toggleAIModal();
       },
       requiresSelection: true
@@ -285,7 +290,7 @@ function TerminalSessionComponent({ session, server, active, activeView, paneId,
       label: t('ai.fix') || 'Fix',
       icon: <Wrench size={14} />,
       action: (text: string) => {
-        setAIContext({ text, action: 'fix' });
+        setAIContext({ text: stripAnsi(text), action: 'fix' });
         toggleAIModal();
       },
       requiresSelection: true
@@ -311,6 +316,166 @@ function TerminalSessionComponent({ session, server, active, activeView, paneId,
     xtermRef.current,
     contextMenuActions
   );
+
+  // Reconnection state
+  const [isReconnecting, setIsReconnecting] = useState(false);
+  const [reconnectAttempt, setReconnectAttempt] = useState(0);
+  const MAX_RECONNECT_ATTEMPTS = 5;
+  const RECONNECT_DELAY_BASE = 2000; // 2 seconds
+
+  const unlistenDataRef = useRef<() => void>(undefined);
+  const unlistenCloseRef = useRef<() => void>(undefined);
+  const reconnectTimerRef = useRef<NodeJS.Timeout>(undefined);
+  const reconnectAttemptRef = useRef(0);
+
+  const safeFit = useCallback(() => {
+    if (!fitAddonRef.current || !xtermRef.current) return;
+
+    // Check if visible
+    if (terminalContainerRef.current?.offsetParent === null) return;
+
+    // Check if renderer is ready
+    const term = xtermRef.current as any;
+    if (!term._core || !term._core._renderService || !term._core._renderService.dimensions) {
+      // Renderer not ready yet, skip resize
+      return;
+    }
+
+    try {
+      fitAddonRef.current.fit();
+      const dims = fitAddonRef.current.proposeDimensions();
+
+      // Ensure dimensions are valid and positive
+      if (dims && dims.cols > 0 && dims.rows > 0) {
+        const isLocal = server.protocol === 'local';
+        const resizeCmd = isLocal ? 'resize_local' : 'resize_ssh';
+        invoke(resizeCmd, { id: session.id, cols: dims.cols, rows: dims.rows })
+          .catch(e => console.warn('Resize failed:', e));
+      }
+    } catch (e) {
+      console.warn('Terminal safeFit failed:', e);
+    }
+  }, [server.protocol, session.id]);
+
+  const connect = useCallback(async (isReconnect = false) => {
+    const term = xtermRef.current;
+    if (!term) return;
+
+    try {
+      if (isReconnect) {
+        term.writeln(`\r\n\x1b[33mReconnecting... (Attempt ${reconnectAttemptRef.current + 1}/${MAX_RECONNECT_ATTEMPTS})\x1b[0m`);
+        setIsReconnecting(true);
+      } else {
+        term.writeln(`Connecting to \x1b[1m${server.host}\x1b[0m...`);
+      }
+
+      const isLocal = server.protocol === 'local';
+      const eventPrefix = isLocal ? 'local' : 'ssh';
+      const connectCmd = isLocal ? 'connect_local' : 'connect_ssh';
+      const disconnectCmd = isLocal ? 'disconnect_local' : 'disconnect_ssh';
+      const resizeCmd = isLocal ? 'resize_local' : 'resize_ssh';
+
+      // Cleanup previous listeners if any
+      if (unlistenDataRef.current) unlistenDataRef.current();
+      if (unlistenCloseRef.current) unlistenCloseRef.current();
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+
+      // Listen for data from backend
+      unlistenDataRef.current = await listen<number[]>(`${eventPrefix}_data_${session.id}`, (event) => {
+        const data = new Uint8Array(event.payload);
+        term.write(data);
+      });
+
+      unlistenCloseRef.current = await listen(`${eventPrefix}_close_${session.id}`, () => {
+        term.writeln('\r\n\x1b[33mConnection closed.\x1b[0m');
+        onUpdateSession(session.id, { status: ConnectionStatus.DISCONNECTED });
+
+        // Auto-reconnect logic
+        if (settings.auto_reconnect && !isLocal) {
+          if (reconnectAttemptRef.current < MAX_RECONNECT_ATTEMPTS) {
+            const delay = RECONNECT_DELAY_BASE * Math.pow(1.5, reconnectAttemptRef.current);
+            term.writeln(`\r\n\x1b[90mRetrying in ${Math.round(delay / 1000)}s...\x1b[0m`);
+
+            reconnectTimerRef.current = setTimeout(() => {
+              reconnectAttemptRef.current++;
+              setReconnectAttempt(reconnectAttemptRef.current);
+              connect(true);
+            }, delay);
+          } else {
+            term.writeln('\r\n\x1b[31mMax reconnection attempts reached.\x1b[0m');
+            setIsReconnecting(false);
+          }
+        } else {
+          setIsReconnecting(false);
+        }
+      });
+
+      // Connect
+      if (isLocal) {
+        await invoke(connectCmd, {
+          id: session.id,
+          cols: 80,
+          rows: 24
+        });
+      } else {
+        await invoke(connectCmd, {
+          id: session.id,
+          host: server.host,
+          port: server.port || 22,
+          username: server.username,
+          password: server.password,
+          privateKey: null
+        });
+      }
+
+      term.writeln('\x1b[32m✓ Connection established.\x1b[0m\r\n');
+      onUpdateSession(session.id, { status: ConnectionStatus.CONNECTED });
+      setIsReconnecting(false);
+      reconnectAttemptRef.current = 0;
+      setReconnectAttempt(0);
+
+      // Get remote home directory for SSH connections
+      if (!isLocal) {
+        try {
+          const remoteHome = await invoke<string>('get_remote_home_directory', { id: session.id });
+          onUpdateSession(session.id, { currentDirectory: remoteHome });
+        } catch (e) {
+          console.error('Failed to get remote home directory:', e);
+          onUpdateSession(session.id, { currentDirectory: '/' });
+        }
+      }
+
+      // Initial resize
+      if (fitAddonRef.current) {
+        const dims = fitAddonRef.current.proposeDimensions();
+        if (dims) {
+          invoke(resizeCmd, { id: session.id, cols: dims.cols, rows: dims.rows });
+        }
+      }
+
+    } catch (e) {
+      console.error(e);
+      term.writeln(`\r\n\x1b[31mConnection failed: ${e}\x1b[0m`);
+      onUpdateSession(session.id, { status: ConnectionStatus.FAILED });
+      setIsReconnecting(false);
+
+      // Retry on failure too?
+      if (settings.auto_reconnect && !server.protocol.includes('local')) {
+        if (reconnectAttemptRef.current < MAX_RECONNECT_ATTEMPTS) {
+          const delay = RECONNECT_DELAY_BASE * Math.pow(1.5, reconnectAttemptRef.current);
+          term.writeln(`\r\n\x1b[90mRetrying in ${Math.round(delay / 1000)}s...\x1b[0m`);
+
+          reconnectTimerRef.current = setTimeout(() => {
+            reconnectAttemptRef.current++;
+            setReconnectAttempt(reconnectAttemptRef.current);
+            connect(true);
+          }, delay);
+        } else {
+          term.writeln('\r\n\x1b[31mMax reconnection attempts reached.\x1b[0m');
+        }
+      }
+    }
+  }, [server, session.id, settings.auto_reconnect, onUpdateSession, setReconnectAttempt, setIsReconnecting, xtermRef, fitAddonRef]);
 
   // Initialize Terminal
   useEffect(() => {
@@ -370,79 +535,8 @@ function TerminalSessionComponent({ session, server, active, activeView, paneId,
     fitAddonRef.current = fitAddon;
 
     term.writeln('\x1b[1;32mNebula SSH Client v2.0\x1b[0m');
-    term.writeln(`Connecting to \x1b[1m${server.host}\x1b[0m...`);
 
-    let unlistenData: () => void;
-    let unlistenClose: () => void;
-
-    const setupSsh = async () => {
-      try {
-        const isLocal = server.protocol === 'local';
-        const eventPrefix = isLocal ? 'local' : 'ssh';
-        const connectCmd = isLocal ? 'connect_local' : 'connect_ssh';
-        const disconnectCmd = isLocal ? 'disconnect_local' : 'disconnect_ssh';
-        const resizeCmd = isLocal ? 'resize_local' : 'resize_ssh';
-
-        // Listen for data from backend
-        unlistenData = await listen<number[]>(`${eventPrefix}_data_${session.id}`, (event) => {
-          const data = new Uint8Array(event.payload);
-          term.write(data);
-        });
-
-        unlistenClose = await listen(`${eventPrefix}_close_${session.id}`, () => {
-          term.writeln('\r\n\x1b[33mConnection closed.\x1b[0m');
-          onUpdateSession(session.id, { status: ConnectionStatus.DISCONNECTED });
-        });
-
-        // Connect
-        if (isLocal) {
-          await invoke(connectCmd, {
-            id: session.id,
-            cols: 80,
-            rows: 24
-          });
-        } else {
-          await invoke(connectCmd, {
-            id: session.id,
-            host: server.host,
-            port: server.port || 22,
-            username: server.username,
-            password: server.password,
-            privateKey: null
-          });
-        }
-
-        term.writeln('\x1b[32m✓ Connection established.\x1b[0m\r\n');
-        onUpdateSession(session.id, { status: ConnectionStatus.CONNECTED });
-
-        // Get remote home directory for SSH connections
-        if (!isLocal) {
-          try {
-            const remoteHome = await invoke<string>('get_remote_home_directory', { id: session.id });
-            onUpdateSession(session.id, { currentDirectory: remoteHome });
-          } catch (e) {
-            console.error('Failed to get remote home directory:', e);
-            // Fallback to /
-            onUpdateSession(session.id, { currentDirectory: '/' });
-          }
-        }
-
-        // Initial resize
-        if (fitAddonRef.current) {
-          const dims = fitAddonRef.current.proposeDimensions();
-          if (dims) {
-            invoke(resizeCmd, { id: session.id, cols: dims.cols, rows: dims.rows });
-          }
-        }
-
-      } catch (e) {
-        console.error(e);
-        term.writeln(`\r\n\x1b[31mConnection failed: ${e}\x1b[0m`);
-        onUpdateSession(session.id, { status: ConnectionStatus.FAILED });
-      }
-    };
-
-    setupSsh();
+    connect();
 
     // Handle Input
     term.onData(data => {
@@ -467,13 +561,15 @@ function TerminalSessionComponent({ session, server, active, activeView, paneId,
 
     return () => {
       window.removeEventListener('resize', handleResize);
-      if (unlistenData) unlistenData();
-      if (unlistenClose) unlistenClose();
+      if (unlistenDataRef.current) unlistenDataRef.current();
+      if (unlistenCloseRef.current) unlistenCloseRef.current();
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
 
       term.dispose();
       xtermRef.current = null;
     };
-  }, []); // Run once on mount
+  }, [session.id, server.protocol, settings.theme, settings.history_limit]); // Run once on mount, ignore active/activeView changes for init
+
 
   // Handle active state changes (focus and resize)
   useEffect(() => {
@@ -511,34 +607,7 @@ function TerminalSessionComponent({ session, server, active, activeView, paneId,
     }
   }, [activeView, isSidebarOpen]);
 
-  const safeFit = () => {
-    if (!fitAddonRef.current || !xtermRef.current) return;
 
-    // Check if visible
-    if (terminalContainerRef.current?.offsetParent === null) return;
-
-    // Check if renderer is ready
-    const term = xtermRef.current as any;
-    if (!term._core || !term._core._renderService || !term._core._renderService.dimensions) {
-      // Renderer not ready yet, skip resize
-      return;
-    }
-
-    try {
-      fitAddonRef.current.fit();
-      const dims = fitAddonRef.current.proposeDimensions();
-
-      // Ensure dimensions are valid and positive
-      if (dims && dims.cols > 0 && dims.rows > 0) {
-        const isLocal = server.protocol === 'local';
-        const resizeCmd = isLocal ? 'resize_local' : 'resize_ssh';
-        invoke(resizeCmd, { id: session.id, cols: dims.cols, rows: dims.rows })
-          .catch(e => console.warn('Resize failed:', e));
-      }
-    } catch (e) {
-      console.warn('Terminal safeFit failed:', e);
-    }
-  };
 
   // Mock Shell Logic for Fallback
   const startMockShell = (term: Terminal) => {
@@ -649,11 +718,59 @@ function TerminalSessionComponent({ session, server, active, activeView, paneId,
             e.stopPropagation();
             onClosePane?.();
           }}
-          className="absolute top-2 right-2 z-20 p-1.5 rounded-md bg-slate-100 dark:bg-dark-surface hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 transition-colors group"
+          className="absolute top-2 right-2 z-10 p-1 bg-slate-800/80 hover:bg-red-500/80 text-slate-400 hover:text-white rounded-md transition-colors opacity-0 group-hover:opacity-100"
           title={t('terminal.close_pane')}
         >
-          <X size={14} className="group-hover:scale-110 transition-transform" />
+          <X size={14} />
         </button>
+      )}
+
+      {/* Disconnected / Reconnecting Overlay */}
+      {(session.status === ConnectionStatus.DISCONNECTED || session.status === ConnectionStatus.FAILED || isReconnecting) && (
+        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-slate-950/80 backdrop-blur-sm">
+          {isReconnecting ? (
+            <div className="flex flex-col items-center gap-3">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-nebula-500"></div>
+              <span className="text-slate-300 font-medium">
+                {t('terminal.reconnecting')} {reconnectAttempt > 0 && `(${reconnectAttempt}/${MAX_RECONNECT_ATTEMPTS})`}
+              </span>
+              <button
+                onClick={() => {
+                  setIsReconnecting(false);
+                  if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+                  reconnectAttemptRef.current = 0;
+                  setReconnectAttempt(0);
+                }}
+                className="mt-2 px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-sm transition-colors"
+              >
+                {t('common.cancel')}
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-4">
+              <div className="text-slate-400 mb-2">
+                {session.status === ConnectionStatus.FAILED ? (
+                  <div className="flex items-center gap-2 text-red-400">
+                    <AlertCircle size={24} />
+                    <span className="font-medium">{t('terminal.connection_failed')}</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 text-yellow-400">
+                    <Unplug size={24} />
+                    <span className="font-medium">{t('terminal.disconnected')}</span>
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={() => connect(true)}
+                className="flex items-center gap-2 px-6 py-2 bg-nebula-600 hover:bg-nebula-500 text-white rounded-md font-medium transition-colors shadow-lg shadow-nebula-900/20"
+              >
+                <RefreshCw size={16} />
+                {t('terminal.reconnect')}
+              </button>
+            </div>
+          )}
+        </div>
       )}
       <div className="flex-1 flex flex-col min-h-0 overflow-hidden relative bg-slate-50 dark:bg-dark-bg">
         {/* Top Bar */}

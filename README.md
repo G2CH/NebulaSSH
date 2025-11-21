@@ -29,7 +29,14 @@
 - 🚀 **High Performance**: Built with Rust and Tauri for minimal resource usage and native performance
 - 🎨 **Modern UI**: Beautiful, frameless design with glassmorphism effects and smooth animations
 - 💻 **Full-featured Terminal**: Powered by xterm.js with custom themes, fonts, and local terminal support
-- 🔐 **Secure**: Local encrypted storage for connection details using SQLite
+- 🔐 **Secure by Design**: Local encrypted storage with master password protection and auto-lock
+
+### Security & Privacy
+- 🔒 **Master Password**: Set a master password to protect your sensitive connection data
+- ⏱️ **Auto-lock**: Configurable idle timeout (5/10/15 minutes) or disable completely
+- 🔐 **Database Encryption**: AES-256 encryption for SQLite database with Argon2 password hashing
+- 🛡️ **Session Persistence**: Securely restore all sessions after restart
+- 🔄 **Auto-reconnect**: Automatic reconnection after network interruptions
 
 ### File Management
 - 📂 **SFTP Integration**: Built-in file browser with drag-and-drop upload/download support
@@ -37,10 +44,10 @@
 - 🗂️ **File Icons**: Beautiful file-type icons for better visual organization
 
 ### Advanced Features
-- 🪟 **Split Panes**: Split your terminal horizontally or vertically for multitasking (v0.2.0)
+- 🪟 **Split Panes**: Split your terminal horizontally or vertically for multitasking
 - 📊 **System Dashboard**: Real-time server monitoring (CPU, RAM, Disk, Network, Processes)
 - 📋 **Snippet Manager**: Save and execute frequently used commands with one click
-- 🤖 **AI Assistant**: Integrated AI helper for command generation and troubleshooting
+- 🤖 **AI Assistant**: Integrated AI helper for command generation and troubleshooting with context-aware suggestions
 - 🔗 **Port Forwarding**: Local and remote port forwarding support
 - 🌉 **Jump Host**: Connect through bastion/jump hosts
 - 🌐 **Internationalization**: Full support for English and Chinese (Simplified)
@@ -49,6 +56,7 @@
 - 🎨 **Custom Themes**: Choose from Dracula, Nord, Solarized, GitHub Dark/Light, and more
 - 📝 **Command History**: Track and search command history across sessions
 - 🎯 **Context Menu**: Right-click context menu with split, AI, and copy/paste actions
+- ✨ **Enhanced UI Components**: Optimized Select dropdowns with size variants and better styling
 
 ## 🎬 Screenshots
 
@@ -150,6 +158,29 @@ Configure your AI provider in Settings:
 3. Enter your API key and endpoint
 4. Supported providers: OpenAI, Azure OpenAI, or any OpenAI-compatible API
 
+### Security Settings
+
+Protect your sensitive connection data with these security features:
+
+#### Master Password
+1. On first launch, you'll be prompted to set a master password
+2. This password is used to encrypt your database and unlock the application
+3. Use a strong, memorable password - it cannot be recovered if forgotten
+
+#### Auto-lock Configuration
+1. Open Settings → Security
+2. Toggle auto-lock on/off
+3. When enabled, choose from:
+   - **5 minutes**: Lock after 5 minutes of inactivity
+   - **10 minutes**: Lock after 10 minutes of inactivity (default)
+   - **15 minutes**: Lock after 15 minutes of inactivity
+4. When disabled, the app will never auto-lock (master password still required on startup)
+
+#### Database Encryption
+- All connection data is encrypted using AES-256
+- Passwords are hashed with Argon2 for maximum security
+- Encryption key is derived from your master password
+
 ### Terminal Themes
 
 Choose from built-in themes or customize your own:
@@ -192,27 +223,31 @@ sudo pacman -S webkit2gtk-4.1 gtk3 libappindicator-gtk3
 
 > **Product Positioning**: NebulaSSH is a professional standalone offline SSH client designed for enterprise intranet environments, focusing on performance, security, and efficiency.
 
-### v0.3.0 - Session Management & Security (1-2 months) 🔥
+### ✅ v0.3.0 - Session Management & Security (Completed)
 **Core Focus**: Critical user experience and security improvements
 
-- [ ] **Session Persistence** - Restore all sessions after restart
-- [ ] **Auto-reconnect** - Automatic reconnection after disconnection
-- [ ] **Master Password** - Unlock app with master password at startup
-- [ ] **Local Data Encryption** - Encrypt SQLite database for sensitive data
+- [x] **Session Persistence** - Restore all sessions after restart
+- [x] **Auto-reconnect** - Automatic reconnection after disconnection
+- [x] **Master Password** - Unlock app with master password at startup
+- [x] **Auto-lock** - Configurable idle timeout (5/10/15 minutes, or disabled)
+- [x] **Local Data Encryption** - Encrypt SQLite database for sensitive data
+- [x] **AI Markdown Rendering** - Fixed AI response rendering with github-markdown-css
+- [x] **Optimized Select Component** - Enhanced dropdown UI with size variants
+- [x] **Context Menu Enhancements** - ANSI code stripping for clean AI context
+
+### v0.4.0 - Batch Operations 🔥
+**Core Focus**: Bulk server management for DevOps teams
+
 - [ ] **Config Backup/Restore** - Export/import configuration as encrypted JSON
 - [ ] **SSH Agent Forwarding** - Forward SSH agent to jump hosts
 - [ ] **URL Click Support** - Cmd/Ctrl+Click to open URLs in browser
-
-### v0.4.0 - Batch Operations (2-3 months) 🔥
-**Core Focus**: Bulk server management for DevOps teams
-
 - [ ] **Broadcast Input** - Send commands to multiple servers simultaneously
 - [ ] **Batch Script Execution** - Execute scripts on multiple machines at once
 - [ ] **Result Aggregation** - Collect and compare output from multiple servers
 - [ ] **Server Grouping** - Enhanced tree-structure organization
 - [ ] **Color Tagging** - Visual organization with colors
 
-### v0.5.0 - User Experience (3-4 months)
+### v0.5.0 - User Experience
 **Core Focus**: Polish details and improve daily workflow
 
 - [ ] **Custom Keyboard Shortcuts** - Fully configurable shortcuts
@@ -221,7 +256,7 @@ sudo pacman -S webkit2gtk-4.1 gtk3 libappindicator-gtk3
 - [ ] **Global Search** - Quick search across servers and command history
 - [ ] **Preset Shortcuts** - VS Code, Vim-style shortcut schemes
 
-### v0.6.0 - AI Deep Integration (4-5 months) 🚀
+### v0.6.0 - AI Deep Integration🚀
 **Core Focus**: AI-native features for competitive differentiation
 
 - [ ] **AI Command Completion** - Real-time suggestions while typing
@@ -230,7 +265,7 @@ sudo pacman -S webkit2gtk-4.1 gtk3 libappindicator-gtk3
 - [ ] **Local AI Model Support** - Ollama integration for offline usage
 - [ ] **AI Workflow Generator** - Record complex operations as scripts
 
-### v1.0 - Production Ready (6+ months)
+### v1.0 - Production Ready
 **Core Focus**: Stability, performance, and ecosystem
 
 - [ ] **Performance Optimization** - Faster startup, lower memory usage

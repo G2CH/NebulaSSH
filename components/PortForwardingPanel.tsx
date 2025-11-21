@@ -3,6 +3,7 @@ import { PortForwardingRule } from '../types';
 import { Plus, Trash2, ArrowRight } from 'lucide-react';
 import { simpleCn, generateId } from '../utils';
 import { useApp } from '../contexts/AppContext';
+import { Select } from './ui/Select';
 
 interface Props {
     rules: PortForwardingRule[];
@@ -45,17 +46,17 @@ export const PortForwardingPanel: React.FC<Props> = ({ rules, onChange }) => {
     return (
         <div className="space-y-4">
             <div className="flex items-end gap-2 bg-slate-50 dark:bg-dark-surface p-3 rounded-lg border border-slate-200 dark:border-dark-border">
-                <div className="flex-1 space-y-1">
-                    <label className="text-[10px] font-medium text-slate-500 uppercase">Type</label>
-                    <select
+                <div className="flex-1">
+                    <Select
+                        size="sm"
                         value={newRule.rule_type}
                         onChange={e => setNewRule({ ...newRule, rule_type: e.target.value as any })}
-                        className="w-full px-2 py-1.5 text-xs rounded border border-slate-200 dark:border-dark-border bg-white dark:bg-dark-bg"
-                    >
-                        <option value="Local">Local (L)</option>
-                        <option value="Remote">Remote (R)</option>
-                        <option value="Dynamic">Dynamic (D)</option>
-                    </select>
+                        options={[
+                            { value: 'Local', label: 'Local (L)' },
+                            { value: 'Remote', label: 'Remote (R)' },
+                            { value: 'Dynamic', label: 'Dynamic (D)' }
+                        ]}
+                    />
                 </div>
 
                 <div className="w-20 space-y-1">

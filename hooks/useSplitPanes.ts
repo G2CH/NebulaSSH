@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Session, Pane, Tab, SplitNode, Server } from '../types';
+import { Session, Pane, Tab, SplitNode, Server, AppSessionState, TabState, PaneState } from '../types';
 import { ConnectionStatus } from '../types';
 
 export const useSplitPanes = () => {
@@ -264,6 +264,56 @@ export const useSplitPanes = () => {
         }
     }, [activeTabId, tabs, panes, handleCloseTab]);
 
+    const restoreState = useCallback((state: AppSessionState) => {
+        const newSessions: Record<string, Session> = {};
+        const newPanes: Record<string, Pane> = {};
+        const newTabs: Tab[] = [];
+
+        state.tabs.forEach(tabState => {
+            // Restore panes and sessions for this tab
+            if (tabState.panes) {
+                tabState.panes.forEach(paneState => {
+                    // Reconstruct Session
+                    if (!newSessions[paneState.session_id]) {
+                        newSessions[paneState.session_id] = {
+                            id: paneState.session_id,
+                            serverId: paneState.server_id,
+                            status: ConnectionStatus.DISCONNECTED, // Start as disconnected
+                            currentDirectory: paneState.current_directory || undefined,
+                            history: [],
+                            commandHistory: [],
+                            historyPointer: 0,
+                        };
+                    }
+
+                    // Reconstruct Pane
+                    newPanes[paneState.id] = {
+                        id: paneState.id,
+                        sessionId: paneState.session_id,
+                        activeView: paneState.active_view,
+                        editorFile: paneState.editor_file || undefined,
+                    };
+                });
+            }
+
+            // Restore Tab
+            const newTab: Tab = {
+                id: tabState.id,
+                title: tabState.name,
+                activePaneId: tabState.active_pane_id || '',
+                layout: tabState.layout
+            };
+            newTabs.push(newTab);
+        });
+
+        setSessions(newSessions);
+        setPanes(newPanes);
+        setTabs(newTabs);
+        if (state.active_tab_id) {
+            setActiveTabId(state.active_tab_id);
+        }
+    }, []);
+
     return {
         sessions,
         panes,
@@ -278,5 +328,6 @@ export const useSplitPanes = () => {
         handleClosePane,
         setActiveTabId,
         handleResize,
+        restoreState,
     };
 };

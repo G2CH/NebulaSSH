@@ -13,6 +13,8 @@ mod repositories;
 mod db_commands;
 mod ai_service;
 mod ssh_test;
+mod session_state;
+mod security;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -56,6 +58,15 @@ pub fn run() {
         repositories::snippets::delete_snippet,
         ai_service::chat_completion,
         ssh_test::test_ssh_connection,
+        session_state::save_session_state,
+        session_state::load_session_state,
+        session_state::clear_session_state,
+        security::is_master_password_set,
+        security::set_master_password,
+        security::verify_master_password,
+        security::change_master_password,
+        security::unlock_app,
+        security::setup_encryption,
     ])
     .setup(|app| {
       // Initialize database

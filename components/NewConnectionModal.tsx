@@ -5,6 +5,7 @@ import { Modal } from './Modal';
 import { Input } from './ui/Input';
 import { Button } from './ui/Button';
 import { ComboBox } from './ui/ComboBox';
+import { Select } from './ui/Select';
 import { Server } from '../types';
 import { generateId, simpleCn } from '../utils';
 import { useApp } from '../contexts/AppContext';
@@ -109,7 +110,7 @@ export const NewConnectionModal: React.FC<Props> = ({ isOpen, onClose, onSave, e
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={editingServer ? t('modal.edit_connection_title') : t('modal.new_connection_title')}>
+    <Modal isOpen={isOpen} onClose={onClose} title={editingServer ? t('modal.edit_connection_title') : t('modal.new_connection_title')} maxWidth="lg">
       <div className="flex gap-4 mb-4 border-b border-slate-200 dark:border-dark-border">
         <button
           type="button"
@@ -195,23 +196,17 @@ export const NewConnectionModal: React.FC<Props> = ({ isOpen, onClose, onSave, e
             required
           />
 
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-slate-500 dark:text-slate-400 ml-1">Jump Host / Proxy</label>
-            <select
-              value={formData.jump_host_id || ''}
-              onChange={e => setFormData({ ...formData, jump_host_id: e.target.value ? parseInt(e.target.value) : undefined })}
-              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 dark:border-dark-border bg-white dark:bg-dark-surface focus:outline-none focus:ring-2 focus:ring-nebula-500/20 focus:border-nebula-500 transition-all"
-            >
-              <option value="">None (Direct Connection)</option>
-              {servers
-                .filter(s => s.id !== editingServer?.id && s.protocol !== 'local') // Prevent self-reference and local terminals
-                .map(s => (
-                  <option key={s.id} value={s.id}>
-                    {s.name} ({s.host})
-                  </option>
-                ))}
-            </select>
-          </div>
+          <Select
+            label="Jump Host / Proxy"
+            value={formData.jump_host_id || ''}
+            onChange={e => setFormData({ ...formData, jump_host_id: e.target.value ? parseInt(e.target.value) : undefined })}
+            options={[
+              { value: '', label: 'None (Direct Connection)' },
+              ...servers
+                .filter(s => s.id !== editingServer?.id && s.protocol !== 'local')
+                .map(s => ({ value: s.id!, label: `${s.name} (${s.host})` }))
+            ]}
+          />
 
           <div className="relative">
             <Input

@@ -1,9 +1,11 @@
 use rusqlite::{Connection, Result};
 use std::sync::Mutex;
+use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
 
 pub struct Database {
-    conn: Mutex<Connection>,
+    conn: Mutex<Option<Connection>>,
+    path: PathBuf,
 }
 
 impl Database {
@@ -16,20 +18,172 @@ impl Database {
         std::fs::create_dir_all(&app_dir).expect("Failed to create app data dir");
         
         let db_path = app_dir.join("nebula.db");
-        let conn = Connection::open(db_path)?;
         
-        let db = Database {
-            conn: Mutex::new(conn),
-        };
+        // We don't open the connection here anymore, or we open it lazily/on unlock
+        // But to keep it simple, let's store the path and open on unlock/setup
         
-        db.init_schema()?;
-        db.init_default_settings()?;
+        Ok(Database {
+            conn: Mutex::new(None),
+            path: db_path,
+        })
+    }
+
+
+
+    pub fn unlock(&self, key: String) -> Result<()> {
+        let mut conn_guard = self.conn.lock().unwrap();
         
-        Ok(db)
+        if conn_guard.is_some() {
+            return Ok(()); // Already unlocked
+        }
+
+        eprintln!("Unlocking database at path: {:?}", self.path);
+        let conn = Connection::open(&self.path)?;
+        eprintln!("Connection opened successfully");
+        
+        // Set the key - SQLCipher expects x'...' format
+        let formatted_key = format!("x'{}'", key);
+        eprintln!("Setting PRAGMA key = {}", formatted_key);
+        conn.pragma_update(None, "key", &formatted_key)?;
+        
+        // Set synchronous mode to FULL to ensure data is written to disk
+        eprintln!("Setting PRAGMA synchronous = FULL");
+        conn.pragma_update(None, "synchronous", "FULL")?;
+        
+        // Verify encryption by trying to read
+        match conn.query_row("SELECT count(*) FROM sqlite_master", [], |_| Ok(())) {
+            Ok(_) => {
+                eprintln!("Database unlocked successfully");
+                *conn_guard = Some(conn);
+                // Release the lock before calling init methods
+                drop(conn_guard);
+                
+                // Initialize schema now that we have access
+                self.init_schema()?;
+                self.init_default_settings()?;
+                
+                // Force write to disk by setting a pragma
+                self.query(|conn| {
+                    eprintln!("Forcing database file creation");
+                    conn.pragma_update(None, "user_version", &1)?;
+                    Ok(())
+                })?;
+                
+                eprintln!("Database file created successfully");
+                eprintln!("Database path: {:?}", self.path);
+                Ok(())
+            }
+            Err(e) => {
+                eprintln!("Failed to unlock database: {}", e);
+                Err(rusqlite::Error::SqliteFailure(
+                    rusqlite::ffi::Error::new(1),
+                    Some(format!("Failed to unlock database: {}", e)),
+                ))
+            }
+        }
+    }
+
+    pub fn encrypt_existing(&self, key: String) -> Result<()> {
+        let mut conn_guard = self.conn.lock().unwrap();
+        
+        // Open without key (assumes unencrypted)
+        let conn = Connection::open(&self.path)?;
+        
+        // Rekey (encrypt)
+        let formatted_key = format!("x'{}'", key);
+        eprintln!("Setting PRAGMA rekey = {}", formatted_key);
+        conn.pragma_update(None, "rekey", &formatted_key)?;
+        
+        // Set synchronous mode to FULL
+        eprintln!("Setting PRAGMA synchronous = FULL");
+        conn.pragma_update(None, "synchronous", "FULL")?;
+        
+        *conn_guard = Some(conn);
+        // Release the lock before calling init methods
+        drop(conn_guard);
+        
+        self.init_schema()?;
+        self.init_default_settings()?;
+        
+        Ok(())
     }
     
+    // Helper to check if DB exists (for migration logic)
+    pub fn exists(&self) -> bool {
+        self.path.exists()
+    }
+    
+    // Get database file path
+    pub fn get_path(&self) -> &std::path::PathBuf {
+        &self.path
+    }
+    
+    // Force flush data to disk
+    pub fn flush(&self) -> Result<()> {
+        self.query(|conn| {
+            eprintln!("Flushing database to disk");
+            // Execute a checkpoint to force WAL data to main database
+            conn.query_row("PRAGMA wal_checkpoint(FULL);", [], |_| Ok(()))?;
+            eprintln!("Database flushed successfully");
+            Ok(())
+        })
+    }
+    
+    // Check if database has any user data (to distinguish empty DB from migrated DB)
+    pub fn has_data(&self) -> Result<bool> {
+        if !self.path.exists() {
+            return Ok(false);
+        }
+        
+        // Try to open without encryption and check for user data
+        match Connection::open(&self.path) {
+            Ok(conn) => {
+                // Check if servers table exists and has data
+                match conn.query_row(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='servers'", 
+                    [], 
+                    |row| {
+                        let count: i32 = row.get(0)?;
+                        Ok(count > 0)
+                    }
+                ) {
+                    Ok(has_servers_table) => {
+                        if !has_servers_table {
+                            eprintln!("No servers table found");
+                            return Ok(false);
+                        }
+                        
+                        // Check if servers table has any records
+                        match conn.query_row("SELECT COUNT(*) FROM servers", [], |row| {
+                            let count: i32 = row.get(0)?;
+                            Ok(count > 0)
+                        }) {
+                            Ok(has_records) => {
+                                eprintln!("Servers table has records: {}", has_records);
+                                Ok(has_records)
+                            },
+                            Err(_) => {
+                                eprintln!("Failed to query servers table");
+                                Ok(false)
+                            }
+                        }
+                    },
+                    Err(_) => {
+                        eprintln!("Failed to check for servers table");
+                        Ok(false)
+                    }
+                }
+            }
+            Err(_) => {
+                eprintln!("Failed to open database for data check");
+                Ok(false)
+            }
+        }
+    }
+
     fn init_schema(&self) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let guard = self.conn.lock().unwrap();
+        let conn = guard.as_ref().ok_or(rusqlite::Error::InvalidQuery)?; // Should be unlocked
         
         // Servers table
         conn.execute(
@@ -103,8 +257,9 @@ impl Database {
     }
     
     fn init_default_settings(&self) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
-        
+        let guard = self.conn.lock().unwrap();
+        let conn = guard.as_ref().ok_or(rusqlite::Error::InvalidQuery)?;
+
         // Insert default settings if they don't exist
         conn.execute(
             "INSERT OR IGNORE INTO settings (key, value) VALUES ('history_limit', '10000')",
@@ -129,7 +284,16 @@ impl Database {
         Ok(())
     }
     
-    pub fn get_connection(&self) -> std::sync::MutexGuard<'_, Connection> {
-        self.conn.lock().unwrap()
+    // Helper for executing queries that handles the Option
+    pub fn query<F, T>(&self, f: F) -> Result<T>
+    where
+        F: FnOnce(&Connection) -> Result<T>,
+    {
+        let guard = self.conn.lock().unwrap();
+        let conn = guard.as_ref().ok_or(rusqlite::Error::SqliteFailure(
+            rusqlite::ffi::Error::new(1), // SQLITE_ERROR
+            Some("Database locked".to_string()),
+        ))?;
+        f(conn)
     }
 }

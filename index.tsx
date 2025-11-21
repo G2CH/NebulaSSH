@@ -1,6 +1,8 @@
-
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import './index.css';
+import 'xterm/css/xterm.css';
+import 'github-markdown-css/github-markdown.css';
 import App from './App';
 import { AppProvider } from './contexts/AppContext';
 
