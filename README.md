@@ -52,8 +52,17 @@
 
 ## 🎬 Screenshots
 
+
 <div align="center">
-  <img src="screenshots/main.png" alt="Main Interface" width="800" />
+  <img src="screenshots/1.png" alt="main" width="800" />
+  <p><em>Modern, clean interface with split panes</em></p>
+  <img src="screenshots/2.png" alt="main" width="800" />
+  <p><em>Modern, clean interface with split panes</em></p>
+  <img src="screenshots/3.png" alt="main" width="800" />
+  <p><em>Modern, clean interface with split panes</em></p>
+  <img src="screenshots/4.png" alt="main" width="800" />
+  <p><em>Modern, clean interface with split panes</em></p>
+  <img src="screenshots/5.png" alt="main" width="800" />
   <p><em>Modern, clean interface with split panes</em></p>
 </div>
 
