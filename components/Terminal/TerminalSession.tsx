@@ -516,6 +516,13 @@ function TerminalSessionComponent({ session, server, active, activeView, paneId,
     // Check if visible
     if (terminalContainerRef.current?.offsetParent === null) return;
 
+    // Check if renderer is ready
+    const term = xtermRef.current as any;
+    if (!term._core || !term._core._renderService || !term._core._renderService.dimensions) {
+      // Renderer not ready yet, skip resize
+      return;
+    }
+
     try {
       fitAddonRef.current.fit();
       const dims = fitAddonRef.current.proposeDimensions();

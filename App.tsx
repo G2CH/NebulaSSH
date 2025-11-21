@@ -273,7 +273,11 @@ function AppContent() {
 
     try {
       if (session?.serverId === 'local') {
-        await invoke('connect_local', { id: newSessionId });
+        await invoke('connect_local', {
+          id: newSessionId,
+          cols: 80,
+          rows: 24
+        });
       } else {
         await invoke('duplicate_session', {
           sourceId: sourceSessionId,
