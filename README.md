@@ -190,14 +190,54 @@ sudo pacman -S webkit2gtk-4.1 gtk3 libappindicator-gtk3
 
 ## 🗺️ Roadmap
 
-- [ ] Session persistence across restarts
-- [ ] Tab grouping and organization
-- [ ] Custom keyboard shortcuts
-- [ ] SSH key management UI
-- [ ] Connection profiles and templates
-- [ ] Tunneling and proxy support
-- [ ] Multi-cursor support in editor
-- [ ] Plugin system
+> **Product Positioning**: NebulaSSH is a professional standalone offline SSH client designed for enterprise intranet environments, focusing on performance, security, and efficiency.
+
+### v0.3.0 - Session Management & Security (1-2 months) 🔥
+**Core Focus**: Critical user experience and security improvements
+
+- [ ] **Session Persistence** - Restore all sessions after restart
+- [ ] **Auto-reconnect** - Automatic reconnection after disconnection
+- [ ] **Master Password** - Unlock app with master password at startup
+- [ ] **Local Data Encryption** - Encrypt SQLite database for sensitive data
+- [ ] **Config Backup/Restore** - Export/import configuration as encrypted JSON
+- [ ] **SSH Agent Forwarding** - Forward SSH agent to jump hosts
+- [ ] **URL Click Support** - Cmd/Ctrl+Click to open URLs in browser
+
+### v0.4.0 - Batch Operations (2-3 months) 🔥
+**Core Focus**: Bulk server management for DevOps teams
+
+- [ ] **Broadcast Input** - Send commands to multiple servers simultaneously
+- [ ] **Batch Script Execution** - Execute scripts on multiple machines at once
+- [ ] **Result Aggregation** - Collect and compare output from multiple servers
+- [ ] **Server Grouping** - Enhanced tree-structure organization
+- [ ] **Color Tagging** - Visual organization with colors
+
+### v0.5.0 - User Experience (3-4 months)
+**Core Focus**: Polish details and improve daily workflow
+
+- [ ] **Custom Keyboard Shortcuts** - Fully configurable shortcuts
+- [ ] **Workspace** - Save and restore window layouts and session sets
+- [ ] **Tab Management** - Drag-and-drop, grouping, color marking
+- [ ] **Global Search** - Quick search across servers and command history
+- [ ] **Preset Shortcuts** - VS Code, Vim-style shortcut schemes
+
+### v0.6.0 - AI Deep Integration (4-5 months) 🚀
+**Core Focus**: AI-native features for competitive differentiation
+
+- [ ] **AI Command Completion** - Real-time suggestions while typing
+- [ ] **Natural Language to Command** - "Find largest files" → auto-execute
+- [ ] **Smart Error Recovery** - Auto-suggest fixes for failed commands
+- [ ] **Local AI Model Support** - Ollama integration for offline usage
+- [ ] **AI Workflow Generator** - Record complex operations as scripts
+
+### v1.0 - Production Ready (6+ months)
+**Core Focus**: Stability, performance, and ecosystem
+
+- [ ] **Performance Optimization** - Faster startup, lower memory usage
+- [ ] **Stability** - Comprehensive error handling and crash recovery
+- [ ] **Documentation** - Complete user manual and tutorials
+- [ ] **Plugin System** - Allow community themes and extensions
+- [ ] **Audit Logging** - Enterprise-grade operation logging
 
 ## 🤝 Contributing
 
