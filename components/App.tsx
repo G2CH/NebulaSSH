@@ -8,12 +8,12 @@ import { NewConnectionModal } from './components/NewConnectionModal';
 import { SettingsModal } from './components/SettingsModal';
 import { Button } from './components/ui/Button';
 import { useApp } from './contexts/AppContext';
-import { 
-  Plus, 
-  Search, 
-  Settings, 
-  Command, 
-  X, 
+import {
+  Plus,
+  Search,
+  Settings,
+  Command,
+  X,
   Menu,
   ChevronLeft,
   ChevronDown,
@@ -81,8 +81,8 @@ export default function App() {
   };
 
   const groupedServers = useMemo(() => {
-    const filtered = servers.filter(s => 
-      s.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    const filtered = servers.filter(s =>
+      s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       s.host.includes(searchQuery) ||
       s.tags.some(t => t.includes(searchQuery))
     );
@@ -101,9 +101,9 @@ export default function App() {
 
   return (
     <div className="flex h-screen w-screen bg-slate-50 dark:bg-dark-bg overflow-hidden text-slate-800 dark:text-slate-200 selection:bg-nebula-500/30 selection:text-nebula-600 dark:selection:text-nebula-100 font-sans transition-colors duration-300">
-      
+
       {/* Sidebar */}
-      <div 
+      <div
         className={simpleCn(
           "flex flex-col bg-white dark:bg-[#0b0b0d] border-r border-slate-200 dark:border-dark-border transition-all duration-300 ease-out z-30 shadow-xl md:shadow-none",
           isSidebarOpen ? "w-[280px] translate-x-0" : "w-0 -translate-x-10 opacity-0 overflow-hidden absolute md:relative"
@@ -128,7 +128,7 @@ export default function App() {
         <div className="px-4 py-3">
           <div className="relative group">
             <Search className="absolute left-3 top-2.5 text-slate-400 dark:text-slate-500 group-focus-within:text-nebula-500 dark:group-focus-within:text-nebula-400 transition-colors" size={14} />
-            <input 
+            <input
               className="w-full bg-slate-50 dark:bg-dark-surface border border-slate-200 dark:border-dark-border rounded-xl py-2 pl-9 pr-3 text-xs text-slate-800 dark:text-slate-300 focus:outline-none focus:border-nebula-500/40 focus:ring-2 focus:ring-nebula-500/10 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-600"
               placeholder={t('sidebar.search')}
               value={searchQuery}
@@ -144,10 +144,10 @@ export default function App() {
               <span>{t('sidebar.empty')}</span>
             </div>
           )}
-          
+
           {groupedServers.map(([groupName, groupServers]) => (
             <div key={groupName} className="animate-fade-in">
-              <button 
+              <button
                 onClick={() => toggleGroup(groupName)}
                 className="flex items-center w-full px-3 py-2 text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest hover:text-slate-600 dark:hover:text-slate-300 transition-colors group select-none"
               >
@@ -161,13 +161,13 @@ export default function App() {
                   {groupServers.length}
                 </span>
               </button>
-              
+
               {!collapsedGroups.has(groupName) && (
                 <div className="space-y-1 mt-0.5">
                   {groupServers.map(server => (
-                    <ConnectionItem 
-                      key={server.id} 
-                      server={server} 
+                    <ConnectionItem
+                      key={server.id}
+                      server={server}
                       onClick={() => handleConnect(server)}
                       onConnect={() => handleConnect(server)}
                     />
@@ -180,41 +180,41 @@ export default function App() {
 
         {/* Sidebar Footer */}
         <div className="p-3 border-t border-slate-200 dark:border-dark-border bg-white dark:bg-[#0b0b0d]">
-          <button 
+          <button
             onClick={() => setIsSettingsModalOpen(true)}
             className="flex items-center justify-between w-full p-2.5 rounded-lg hover:bg-slate-50 dark:hover:bg-dark-surface group transition-colors"
           >
-             <div className="flex items-center gap-3">
-               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-[10px] font-bold text-white shadow-sm">
-                 JD
-               </div>
-               <div className="text-left">
-                 <div className="text-xs font-medium text-slate-700 dark:text-slate-200 group-hover:text-slate-900 dark:group-hover:text-white">John Doe</div>
-                 <div className="text-[10px] text-slate-400 dark:text-slate-500">{t('sidebar.plan_pro')}</div>
-               </div>
-             </div>
-             <Settings size={16} className="text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-300" />
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 flex items-center justify-center text-[10px] font-bold text-white shadow-sm">
+                JD
+              </div>
+              <div className="text-left">
+                <div className="text-xs font-medium text-slate-700 dark:text-slate-200 group-hover:text-slate-900 dark:group-hover:text-white">John Doe</div>
+                <div className="text-[10px] text-slate-400 dark:text-slate-500">{t('sidebar.plan_pro')}</div>
+              </div>
+            </div>
+            <Settings size={16} className="text-slate-400 dark:text-slate-500 group-hover:text-slate-600 dark:group-hover:text-slate-300" />
           </button>
         </div>
       </div>
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0 bg-slate-50 dark:bg-[#0d1117] relative transition-all">
-        
+
         {/* Mobile Menu Toggle */}
         <div className="absolute left-4 bottom-4 z-50 md:hidden">
-           <Button size="icon" onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="rounded-full shadow-xl bg-nebula-600 hover:bg-nebula-500">
-              <Menu size={20} />
-           </Button>
+          <Button size="icon" onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="rounded-full shadow-xl bg-nebula-600 hover:bg-nebula-500">
+            <Menu size={20} />
+          </Button>
         </div>
 
         {/* Global Tab Bar */}
         <div className="h-11 bg-slate-50 dark:bg-[#0d1117] flex items-end px-2 gap-1 select-none border-b border-slate-200 dark:border-dark-border/50 z-20 transition-colors">
-          <button 
+          <button
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
             className="mb-2 mr-2 p-1.5 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 rounded-lg hover:bg-slate-200 dark:hover:bg-dark-surface/50 transition-all hidden md:block"
           >
-             {isSidebarOpen ? <ChevronLeft size={18} /> : <Menu size={18} />}
+            {isSidebarOpen ? <ChevronLeft size={18} /> : <Menu size={18} />}
           </button>
 
           <div className="flex-1 flex gap-1 overflow-x-auto no-scrollbar h-full items-end pb-[1px]">
@@ -222,26 +222,26 @@ export default function App() {
               const server = servers.find(s => s.id === session.serverId);
               const isActive = activeSessionId === session.id;
               return (
-                <div 
+                <div
                   key={session.id}
                   onClick={() => setActiveSessionId(session.id)}
                   className={simpleCn(
                     "group relative flex items-center gap-2.5 px-4 h-9 rounded-t-lg text-xs font-medium min-w-[160px] max-w-[240px] cursor-pointer transition-all duration-200 border-t border-x",
-                    isActive 
-                      ? "bg-white dark:bg-[#0d1117] border-slate-200 dark:border-dark-border border-b-white dark:border-b-[#0d1117] text-slate-800 dark:text-slate-100 shadow-sm dark:shadow-[0_-4px_12px_rgba(0,0,0,0.2)] z-10" 
+                    isActive
+                      ? "bg-white dark:bg-[#0d1117] border-slate-200 dark:border-dark-border border-b-white dark:border-b-[#0d1117] text-slate-800 dark:text-slate-100 shadow-sm dark:shadow-[0_-4px_12px_rgba(0,0,0,0.2)] z-10"
                       : "bg-slate-200/50 dark:bg-[#121214] border-transparent text-slate-500 hover:bg-slate-200 dark:hover:bg-[#18181b] hover:text-slate-700 dark:hover:text-slate-300"
                   )}
                 >
                   {isActive && <div className="absolute top-0 left-0 w-full h-[2px] bg-nebula-500 rounded-t-full" />}
-                  
+
                   <div className={simpleCn(
-                    "w-1.5 h-1.5 rounded-full transition-colors", 
+                    "w-1.5 h-1.5 rounded-full transition-colors",
                     isActive ? "bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.6)]" : "bg-slate-400 dark:bg-slate-600"
                   )} />
-                  
+
                   <span className="truncate flex-1">{server?.name || t('common.unknown')}</span>
-                  
-                  <button 
+
+                  <button
                     onClick={(e) => handleCloseSession(session.id, e)}
                     className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-100 dark:hover:bg-white/10 text-slate-400 dark:text-slate-500 hover:text-red-500 dark:hover:text-red-400 rounded transition-all"
                   >
@@ -251,21 +251,21 @@ export default function App() {
               );
             })}
           </div>
-          
+
           <div className="h-full flex items-center px-2 mb-[1px]">
-             <button 
-               onClick={() => setIsNewConnectionModalOpen(true)}
-               className="p-1.5 rounded-lg text-slate-400 dark:text-slate-500 hover:text-nebula-600 dark:hover:text-nebula-400 hover:bg-nebula-50 dark:hover:bg-nebula-500/10 transition-all"
-               title={t('sidebar.new_connection')}
-             >
-                <Plus size={18} />
-             </button>
+            <button
+              onClick={() => setIsNewConnectionModalOpen(true)}
+              className="p-1.5 rounded-lg text-slate-400 dark:text-slate-500 hover:text-nebula-600 dark:hover:text-nebula-400 hover:bg-nebula-50 dark:hover:bg-nebula-500/10 transition-all"
+              title={t('sidebar.new_connection')}
+            >
+              <Plus size={18} />
+            </button>
           </div>
         </div>
 
         {/* Workspace */}
         {activeSession ? (
-          <TerminalSession 
+          <TerminalSession
             key={activeSession.id}
             session={activeSession}
             active={true}
@@ -274,39 +274,39 @@ export default function App() {
           />
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-slate-500 space-y-8 p-8 relative overflow-hidden bg-slate-50 dark:bg-dark-bg">
-             {/* Decorative background elements */}
-             <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-nebula-500/5 rounded-full blur-3xl mix-blend-multiply dark:mix-blend-normal" />
-             <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/5 rounded-full blur-3xl mix-blend-multiply dark:mix-blend-normal" />
+            {/* Decorative background elements */}
+            <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-nebula-500/5 rounded-full blur-3xl mix-blend-multiply dark:mix-blend-normal" />
+            <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/5 rounded-full blur-3xl mix-blend-multiply dark:mix-blend-normal" />
 
-             <div className="relative z-10 flex flex-col items-center text-center animate-fade-in-up">
-               <div className="w-32 h-32 rounded-[2rem] bg-white dark:bg-dark-surface border border-slate-200 dark:border-dark-border/50 flex items-center justify-center rotate-6 shadow-xl mb-8 relative group cursor-default transition-transform hover:rotate-3 hover:scale-105 duration-500">
-                  <div className="absolute inset-0 bg-gradient-to-br from-nebula-500/20 to-purple-500/20 rounded-[2rem] opacity-0 group-hover:opacity-100 transition-opacity" />
-                  <Command size={64} className="text-slate-300 dark:text-slate-600 group-hover:text-slate-500 dark:group-hover:text-slate-200 transition-colors" />
-               </div>
-               
-               <h2 className="text-3xl font-bold text-slate-800 dark:text-slate-200 mb-3 tracking-tight">{t('common.connect')}</h2>
-               <p className="text-slate-500 dark:text-slate-400 max-w-md text-sm leading-relaxed mb-8">
-                 {t('terminal.welcome')}
-               </p>
-               
-               <div className="flex gap-4">
-                 <Button onClick={() => setIsNewConnectionModalOpen(true)} className="pl-4 pr-5 py-2.5 shadow-lg shadow-nebula-500/20">
-                    <Plus size={18} className="mr-2" />
-                    {t('modal.new_connection_title')}
-                 </Button>
-               </div>
-             </div>
+            <div className="relative z-10 flex flex-col items-center text-center animate-fade-in-up">
+              <div className="w-32 h-32 rounded-[2rem] bg-white dark:bg-dark-surface border border-slate-200 dark:border-dark-border/50 flex items-center justify-center rotate-6 shadow-xl mb-8 relative group cursor-default transition-transform hover:rotate-3 hover:scale-105 duration-500">
+                <div className="absolute inset-0 bg-gradient-to-br from-nebula-500/20 to-purple-500/20 rounded-[2rem] opacity-0 group-hover:opacity-100 transition-opacity" />
+                <Command size={64} className="text-slate-300 dark:text-slate-600 group-hover:text-slate-500 dark:group-hover:text-slate-200 transition-colors" />
+              </div>
+
+              <h2 className="text-3xl font-bold text-slate-800 dark:text-slate-200 mb-3 tracking-tight">{t('common.connect')}</h2>
+              <p className="text-slate-500 dark:text-slate-400 max-w-md text-sm leading-relaxed mb-8">
+                {t('terminal.welcome')}
+              </p>
+
+              <div className="flex gap-4">
+                <Button onClick={() => setIsNewConnectionModalOpen(true)} className="pl-4 pr-5 py-2.5 shadow-lg shadow-nebula-500/20">
+                  <Plus size={18} className="mr-2" />
+                  {t('modal.new_connection_title')}
+                </Button>
+              </div>
+            </div>
           </div>
         )}
       </div>
 
-      <NewConnectionModal 
+      <NewConnectionModal
         isOpen={isNewConnectionModalOpen}
         onClose={() => setIsNewConnectionModalOpen(false)}
         onSave={handleAddServer}
       />
-      
-      <SettingsModal 
+
+      <SettingsModal
         isOpen={isSettingsModalOpen}
         onClose={() => setIsSettingsModalOpen(false)}
       />
