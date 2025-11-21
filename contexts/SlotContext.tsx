@@ -4,12 +4,14 @@ interface SlotContextType {
     registerSlot: (id: string, element: HTMLElement | null) => void;
     getSlot: (id: string) => HTMLElement | null;
     slots: Record<string, HTMLElement>;
+    hiddenContainer: HTMLElement | null;
 }
 
 const SlotContext = createContext<SlotContextType | null>(null);
 
 export const SlotProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [slots, setSlots] = useState<Record<string, HTMLElement>>({});
+    const [hiddenContainer, setHiddenContainer] = useState<HTMLElement | null>(null);
 
     const registerSlot = useCallback((id: string, element: HTMLElement | null) => {
         setSlots(prev => {
@@ -25,8 +27,12 @@ export const SlotProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const getSlot = useCallback((id: string) => slots[id] || null, [slots]);
 
     return (
-        <SlotContext.Provider value={{ registerSlot, getSlot, slots }}>
+        <SlotContext.Provider value={{ registerSlot, getSlot, slots, hiddenContainer }}>
             {children}
+            <div
+                ref={setHiddenContainer}
+                style={{ display: 'none', position: 'absolute', width: 0, height: 0, overflow: 'hidden' }}
+            />
         </SlotContext.Provider>
     );
 };

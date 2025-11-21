@@ -4,15 +4,11 @@ import { SlotProvider, useSlot } from './contexts/SlotContext';
 
 // Helper component to portal pane content
 const PanePortal: React.FC<{ paneId: string; children: React.ReactNode }> = ({ paneId, children }) => {
-  const { slots } = useSlot();
-  const [container, setContainer] = React.useState<HTMLElement | null>(null);
+  const { slots, hiddenContainer } = useSlot();
+  const target = slots[paneId] || hiddenContainer;
 
-  React.useEffect(() => {
-    setContainer(slots[paneId] || null);
-  }, [slots, paneId]);
-
-  if (!container) return null;
-  return createPortal(children, container);
+  if (!target) return null;
+  return createPortal(children, target);
 };
 
 import { invoke } from '@tauri-apps/api/core';
