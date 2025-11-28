@@ -109,6 +109,7 @@ impl Database {
     }
     
     // Helper to check if DB exists (for migration logic)
+    #[allow(dead_code)]
     pub fn exists(&self) -> bool {
         self.path.exists()
     }
@@ -130,6 +131,7 @@ impl Database {
     }
     
     // Check if database has any user data (to distinguish empty DB from migrated DB)
+    #[allow(dead_code)]
     pub fn has_data(&self) -> Result<bool> {
         if !self.path.exists() {
             return Ok(false);

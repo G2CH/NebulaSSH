@@ -36,6 +36,38 @@ pub struct SshConnection {
     pub jump_host_id: Option<i64>,
 }
 
+// Helper struct for adaptive sleep
+struct Backoff {
+    current_ms: u64,
+    min_ms: u64,
+    max_ms: u64,
+}
+
+impl Backoff {
+    fn new(min_ms: u64, max_ms: u64) -> Self {
+        Self {
+            current_ms: min_ms,
+            min_ms,
+            max_ms,
+        }
+    }
+
+    fn reset(&mut self) {
+        self.current_ms = self.min_ms;
+    }
+
+    fn wait(&mut self) {
+        thread::sleep(std::time::Duration::from_millis(self.current_ms));
+        // Linear backoff
+        if self.current_ms < self.max_ms {
+            self.current_ms += 10;
+            if self.current_ms > self.max_ms {
+                self.current_ms = self.max_ms;
+            }
+        }
+    }
+}
+
 #[tauri::command]
 pub async fn connect_ssh(
     window: Window,
@@ -129,6 +161,8 @@ pub async fn connect_ssh(
                         // But session is shared. 
                         // Let's use a short timeout loop.
                         
+                        let mut backoff = Backoff::new(10, 50);
+
                         loop {
                             let mut activity = false;
                             
@@ -169,8 +203,10 @@ pub async fn connect_ssh(
                                 Err(_) => break,
                             }
                             
-                            if !activity {
-                                thread::sleep(std::time::Duration::from_millis(10));
+                            if activity {
+                                backoff.reset();
+                            } else {
+                                backoff.wait();
                             }
                         }
                     }
@@ -317,7 +353,11 @@ pub async fn connect_ssh(
                                             
                                             // Let's just do a simple loop with read timeouts.
                                             let mut buf = [0u8; 4096];
+                                            let mut backoff = Backoff::new(10, 50);
+
                                             loop {
+                                                let mut activity = false;
+
                                                 // Read from local, write to remote
                                                 local_reader.set_nonblocking(true).ok();
                                                 match local_reader.read(&mut buf) {
@@ -325,6 +365,7 @@ pub async fn connect_ssh(
                                                     Ok(n) => {
                                                         if let Err(_) = remote_channel.write_all(&buf[..n]) { break; }
                                                         remote_channel.flush().ok();
+                                                        activity = true;
                                                     }
                                                     Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
                                                     Err(_) => break,
@@ -350,6 +391,11 @@ pub async fn connect_ssh(
                                                 // Actually, let's just leave a TODO comment and print for now to verify the UI flow.
                                                 // Implementing a robust full-duplex proxy in a sync thread with ssh2 is non-trivial code.
                                                 // I will implement a basic "connect" log.
+                                                if activity {
+                                                    backoff.reset();
+                                                } else {
+                                                    backoff.wait();
+                                                }
                                             }
                                         }
                                         Err(e) => eprintln!("Failed to create channel: {}", e),
@@ -370,7 +416,11 @@ pub async fn connect_ssh(
     // Spawn a thread to handle the session
     thread::spawn(move || {
         let mut buf = [0u8; 4096];
+        let mut backoff = Backoff::new(10, 50);
+
         loop {
+            let mut activity = false;
+
             // Non-blocking read
             // ssh2 doesn't support easy non-blocking read without setting the session to non-blocking
             // But if we set it to non-blocking, we need to manage the loop carefully.
@@ -387,11 +437,13 @@ pub async fn connect_ssh(
             if let Ok(data) = rx_write.try_recv() {
                 let _ = channel.write_all(&data);
                 let _ = channel.flush();
+                activity = true;
             }
 
             // Check for resize
             if let Ok((cols, rows)) = rx_resize.try_recv() {
                 let _ = channel.request_pty_size(cols, rows, None, None);
+                activity = true;
             }
 
             // Read data
@@ -419,7 +471,6 @@ pub async fn connect_ssh(
                         break;
                     }
                     // Otherwise, just sleep and continue
-                    thread::sleep(std::time::Duration::from_millis(10));
                 }
                 Ok(n) => {
                     let data = buf[0..n].to_vec();
@@ -428,17 +479,23 @@ pub async fn connect_ssh(
                     // But we can't use `window` here easily if it's not Send?
                     // Window is Send.
                     let _ = window.emit(&format!("ssh_data_{}", id_clone), data);
+                    activity = true;
                 }
                 Err(e) => {
                     if e.kind() == std::io::ErrorKind::WouldBlock { // EAGAIN / WouldBlock
                         // No data, sleep a bit
-                        thread::sleep(std::time::Duration::from_millis(10));
                     } else {
                         // Real error
                         eprintln!("SSH read error for session {}: {}", id_clone, e);
                         break;
                     }
                 }
+            }
+
+            if activity {
+                backoff.reset();
+            } else {
+                backoff.wait();
             }
         }
         println!("SSH thread exiting for session: {}", id_clone);
